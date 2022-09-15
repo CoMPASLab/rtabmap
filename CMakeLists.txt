@@ -469,7 +469,7 @@ ENDIF(WITH_G2O)
 
 IF(WITH_GTSAM)
     # Force config mode to ignore PCL's findGTSAM.cmake file
-    FIND_PACKAGE(GTSAM CONFIG QUIET)
+    FIND_PACKAGE(GTSAM 4.2.0 CONFIG QUIET)
 ENDIF(WITH_GTSAM)
 
 IF(WITH_FLYCAPTURE2)
@@ -1054,6 +1054,12 @@ ENDIF(BUILD_TOOLS)
 IF(BUILD_EXAMPLES)
    ADD_SUBDIRECTORY( examples )
 ENDIF(BUILD_EXAMPLES)
+
+#####
+# Build MBARI executable
+#####
+
+ADD_SUBDIRECTORY( MBARI )
 
 #######################
 # Uninstall target, for "make uninstall"
