@@ -59,6 +59,9 @@ bool exportPoses(
 		const std::map<int, double> & stamps, // required for format 1
 		const ParametersMap & parameters) // optional for formats 3 and 4
 {
+    // Prevent output YAML having commas in floats
+    std::setlocale(LC_ALL, "en_US.UTF-8");
+
 	UDEBUG("%s", filePath.c_str());
 	std::string tmpPath = filePath;
 	if(format==3) // TORO
