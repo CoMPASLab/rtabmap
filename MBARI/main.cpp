@@ -97,6 +97,12 @@ int main(int argc, char * argv[])
 	std::string output;
 	std::string outputName = "rtabmap";
 	std::string seq;
+	std::string leftImageDirName;
+	std::string rightImageDirName;
+	std::string leftCalibFileName;
+	std::string rightCalibFileName;
+	std::string imuDataFileName;
+	std::string imuCalibFileName;
 	bool disp = false;
 	bool raw = false;
 	bool exposureCompensation = false;
@@ -140,7 +146,7 @@ int main(int argc, char * argv[])
 			}
 		}
 		parameters = Parameters::parseArguments(argc, argv);
-		path = argv[argc-1];
+		path = argv[argc-7];
 		path = uReplaceChar(path, '~', UDirectory::homeDir());
 		path = uReplaceChar(path, '\\', '/');
 		if(output.empty())
@@ -152,6 +158,12 @@ int main(int argc, char * argv[])
 			output = uReplaceChar(output, '~', UDirectory::homeDir());
 			UDirectory::makeDir(output);
 		}
+		leftImageDirName = argv[argc-6];
+		rightImageDirName = argv[argc-5];
+		leftCalibFileName = argv[argc-4];
+		rightCalibFileName = argv[argc-3];
+		imuDataFileName = argv[argc-2];
+		imuCalibFileName = argv[argc-1];
 		parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
 		parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
 		if(raw)
@@ -161,17 +173,12 @@ int main(int argc, char * argv[])
 	}
 
 	seq = uSplit(path, '/').back();
-	std::string pathLeftImages  = path+"/mav0/cam0/data";
-	std::string pathRightImages = path+"/mav0/cam1/data";
-	std::string pathCalibLeft = path+"/mav0/cam0/sensor.yaml";
-	std::string pathCalibRight = path+"/mav0/cam1/sensor.yaml";
-	std::string pathGt = path+"/mav0/state_groundtruth_estimate0/data.csv";
-	std::string pathImu = path+"/mav0/imu0/data.csv";
-	if(!UFile::exists(pathGt))
-	{
-		UWARN("Ground truth file path doesn't exist: \"%s\", benchmark values won't be computed.", pathGt.c_str());
-		pathGt.clear();
-	}
+	std::string pathLeftImages  = path + leftImageDirName;
+	std::string pathRightImages = path + rightImageDirName;
+	std::string pathCalibLeft = path + leftCalibFileName;
+	std::string pathCalibRight = path + rightCalibFileName;
+	std::string pathImuData = path + imuDataFileName;
+	std::string pathImuCalib = path + imuCalibFileName;
 
 	printf("Paths:\n"
 			"   Sequence number:  %s\n"
@@ -181,7 +188,9 @@ int main(int argc, char * argv[])
 			"   left images:      %s\n"
 			"   right images:     %s\n"
 			"   left calib:       %s\n"
-			"   right calib:      %s\n",
+			"   right calib:      %s\n"
+			"   imu data:         %s\n"
+			"   imu calib:        %s\n",
 			seq.c_str(),
 			path.c_str(),
 			output.c_str(),
@@ -189,14 +198,12 @@ int main(int argc, char * argv[])
 			pathLeftImages.c_str(),
 			pathRightImages.c_str(),
 			pathCalibLeft.c_str(),
-			pathCalibRight.c_str());
-	if(!pathGt.empty())
+			pathCalibRight.c_str(),
+			pathImuData.c_str(),
+			pathImuCalib.c_str());
+	if(!pathImuData.empty())
 	{
-		printf("   Ground truth:     %s\n", pathGt.c_str());
-	}
-	if(!pathImu.empty())
-	{
-		printf("   IMU:              %s\n", pathImu.c_str());
+		printf("   IMU:              %s\n", pathImuData.c_str());
 		printf("   IMU Filter:       %d\n", imuFilter);
 	}
 
@@ -216,9 +223,10 @@ int main(int argc, char * argv[])
 
 	std::vector<CameraModel> models;
 	int rateHz = 20;
+    
+	// Load left and right calibration
 	for(int k=0; k<2; ++k)
 	{
-		// Left calibration
 		std::string calibPath = k==0?pathCalibLeft:pathCalibRight;
 		YAML::Node config = YAML::LoadFile(calibPath);
 		if(config.IsNull())
@@ -272,17 +280,28 @@ int main(int argc, char * argv[])
 	}
 	printf("Saved calibration \"%s\" to \"%s\"\n", (outputName+"_calib").c_str(), output.c_str());
 
-
 	if(quiet)
 	{
 		ULogger::setLevel(ULogger::kError);
 	}
 
 	// We use CameraThread only to use postUpdate() method
-       
-    // Removed unnecessary transform from this
-    // Should this also be read from a calib file?
-	Transform baseToImu(1,0,0,0, 0,1,0,0, 0,0,1,0);
+
+    // Load IMU calibration
+    YAML::Node config = YAML::LoadFile(pathImuCalib);
+    if(config.IsNull())
+    {
+        UERROR("Cannot open IMU calibration file \"%s\"", pathImuCalib.c_str());
+        return -1;
+    }
+
+    YAML::Node T_BS = config["T_BS"];
+    YAML::Node data = T_BS["data"];
+    UASSERT(data.size() == 16);
+
+    Transform baseToImu(data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
+                data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
+                data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>());
 
 	CameraThread cameraThread(new
 		CameraStereoImages(
@@ -294,6 +313,7 @@ int main(int argc, char * argv[])
 	printf("baseToImu=%s\n", baseToImu.prettyPrint().c_str());
 	std::cout<<"baseToCam0:\n" << baseToImu*models[0].localTransform()*CameraModel::opticalRotation().inverse() << std::endl;
 	printf("baseToCam0=%s\n", (baseToImu*models[0].localTransform()*CameraModel::opticalRotation().inverse()).prettyPrint().c_str());
+	std::cout<<"imuToCam0:\n" << models[0].localTransform() << std::endl;
 	printf("imuToCam0=%s\n", models[0].localTransform().prettyPrint().c_str());
 	printf("imuToCam1=%s\n", models[1].localTransform().prettyPrint().c_str());
 	((CameraStereoImages*)cameraThread.camera())->setTimestamps(true, "", false);
@@ -304,10 +324,6 @@ int main(int argc, char * argv[])
 	if(disp)
 	{
 		cameraThread.setStereoToDepth(true);
-	}
-	if(!pathGt.empty())
-	{
-		((CameraStereoImages*)cameraThread.camera())->setGroundTruthPath(pathGt, 9);
 	}
 
 	float detectionRate = Parameters::defaultRtabmapDetectionRate();
@@ -337,9 +353,9 @@ int main(int argc, char * argv[])
 
 		// open the IMU file
 		std::string line;
-		imu_file.open(pathImu.c_str());
+		imu_file.open(pathImuData.c_str());
 		if (!imu_file.good()) {
-			UERROR("no imu file found at %s",pathImu.c_str());
+			UERROR("no imu file found at %s",pathImuData.c_str());
 			return -1;
 		}
 		int number_of_lines = 0;
@@ -347,7 +363,7 @@ int main(int argc, char * argv[])
 			++number_of_lines;
 		printf("No. IMU measurements: %d\n", number_of_lines-1);
 		if (number_of_lines - 1 <= 0) {
-			UERROR("no imu messages present in %s", pathImu.c_str());
+			UERROR("no imu messages present in %s", pathImuData.c_str());
 			return -1;
 		}
 		// set reading position to second line
@@ -565,101 +581,6 @@ int main(int argc, char * argv[])
 		else
 		{
 			printf("Saving %s... failed!\n", pathTrajectory.c_str());
-		}
-
-		if(!pathGt.empty())
-		{
-			// Log ground truth statistics
-			std::map<int, Transform> groundTruth;
-
-			for(std::map<int, Transform>::const_iterator iter=poses.begin(); iter!=poses.end(); ++iter)
-			{
-				Transform o, gtPose;
-				int m,w;
-				std::string l;
-				double s;
-				std::vector<float> v;
-				GPS gps;
-				EnvSensors sensors;
-				rtabmap.getMemory()->getNodeInfo(iter->first, o, m, w, l, s, gtPose, v, gps, sensors, true);
-				if(!gtPose.isNull())
-				{
-					groundTruth.insert(std::make_pair(iter->first, gtPose));
-				}
-			}
-
-			// compute RMSE statistics
-			float translational_rmse = 0.0f;
-			float translational_mean = 0.0f;
-			float translational_median = 0.0f;
-			float translational_std = 0.0f;
-			float translational_min = 0.0f;
-			float translational_max = 0.0f;
-			float rotational_rmse = 0.0f;
-			float rotational_mean = 0.0f;
-			float rotational_median = 0.0f;
-			float rotational_std = 0.0f;
-			float rotational_min = 0.0f;
-			float rotational_max = 0.0f;
-			// vo performance
-			graph::calcRMSE(
-					groundTruth,
-					vo_poses,
-					translational_rmse,
-					translational_mean,
-					translational_median,
-					translational_std,
-					translational_min,
-					translational_max,
-					rotational_rmse,
-					rotational_mean,
-					rotational_median,
-					rotational_std,
-					rotational_min,
-					rotational_max);
-			float translational_rmse_vo = translational_rmse;
-			float rotational_rmse_vo = rotational_rmse;
-			// SLAM performance
-			graph::calcRMSE(
-					groundTruth,
-					poses,
-					translational_rmse,
-					translational_mean,
-					translational_median,
-					translational_std,
-					translational_min,
-					translational_max,
-					rotational_rmse,
-					rotational_mean,
-					rotational_median,
-					rotational_std,
-					rotational_min,
-					rotational_max);
-
-			printf("   translational_rmse=   %f m   (vo = %f m)\n", translational_rmse, translational_rmse_vo);
-			printf("   rotational_rmse=      %f deg (vo = %f deg)\n", rotational_rmse, rotational_rmse_vo);
-
-			FILE * pFile = 0;
-			std::string pathErrors = output+"/"+outputName+"_rmse.txt";
-			pFile = fopen(pathErrors.c_str(),"w");
-			if(!pFile)
-			{
-				UERROR("could not save RMSE results to \"%s\"", pathErrors.c_str());
-			}
-			fprintf(pFile, "Ground truth comparison:\n");
-			fprintf(pFile, "  translational_rmse=   %f\n", translational_rmse);
-			fprintf(pFile, "  translational_mean=   %f\n", translational_mean);
-			fprintf(pFile, "  translational_median= %f\n", translational_median);
-			fprintf(pFile, "  translational_std=    %f\n", translational_std);
-			fprintf(pFile, "  translational_min=    %f\n", translational_min);
-			fprintf(pFile, "  translational_max=    %f\n", translational_max);
-			fprintf(pFile, "  rotational_rmse=      %f\n", rotational_rmse);
-			fprintf(pFile, "  rotational_mean=      %f\n", rotational_mean);
-			fprintf(pFile, "  rotational_median=    %f\n", rotational_median);
-			fprintf(pFile, "  rotational_std=       %f\n", rotational_std);
-			fprintf(pFile, "  rotational_min=       %f\n", rotational_min);
-			fprintf(pFile, "  rotational_max=       %f\n", rotational_max);
-			fclose(pFile);
 		}
 	}
 	else
