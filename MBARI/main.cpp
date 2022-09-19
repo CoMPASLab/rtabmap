@@ -279,7 +279,11 @@ int main(int argc, char * argv[])
 	}
 
 	// We use CameraThread only to use postUpdate() method
-	Transform baseToImu(0,0,1,0, 0,-1,0,0, 1,0,0,0);
+       
+    // Removed unnecessary transform from this
+    // Should this also be read from a calib file?
+	Transform baseToImu(1,0,0,0, 0,1,0,0, 0,0,1,0);
+
 	CameraThread cameraThread(new
 		CameraStereoImages(
 				pathLeftImages,
