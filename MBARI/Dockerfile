@@ -85,7 +85,7 @@ RUN cd opengv && \
     cd ${DIRPATH} && rm -rf opengv
 
 # Copy current source code
-COPY ./rtabmap ${DIRPATH}/rtabmap
+COPY . ${DIRPATH}/rtabmap
 
 # Build RTAB-Map project
 RUN cd rtabmap/build && \
