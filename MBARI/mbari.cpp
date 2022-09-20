@@ -63,7 +63,6 @@ void showUsage()
 			"  --exposure_comp    Do exposure compensation between left and right images.\n"
 			"  --disp             Generate full disparity.\n"
 			"  --raw              Use raw images (not rectified, this only works with okvis, msckf or vins odometry).\n"
-			"  --imu #            IMU filter: 0=madgwick, 1=complementary (default).\n"
 			"%s\n"
 			"Example:\n\n"
 			"   $ rtabmap-mbari \\\n"
@@ -108,6 +107,7 @@ int main(int argc, char * argv[])
 	bool exposureCompensation = false;
 	bool quiet = false;
 	int imuFilter = 1;
+
 	if(argc < 2)
 	{
 		showUsage();
@@ -136,17 +136,13 @@ int main(int argc, char * argv[])
 			{
 				raw = true;
 			}
-			else if(std::strcmp(argv[i], "--imu") == 0)
-			{
-				imuFilter = atoi(argv[++i]);
-			}
 			else if(std::strcmp(argv[i], "--exposure_comp") == 0)
 			{
 				exposureCompensation = true;
 			}
 		}
 		parameters = Parameters::parseArguments(argc, argv);
-		path = argv[argc-7];
+		path = argv[1];
 		path = uReplaceChar(path, '~', UDirectory::homeDir());
 		path = uReplaceChar(path, '\\', '/');
 		if(output.empty())
@@ -158,12 +154,12 @@ int main(int argc, char * argv[])
 			output = uReplaceChar(output, '~', UDirectory::homeDir());
 			UDirectory::makeDir(output);
 		}
-		leftImageDirName = argv[argc-6];
-		rightImageDirName = argv[argc-5];
-		leftCalibFileName = argv[argc-4];
-		rightCalibFileName = argv[argc-3];
-		imuDataFileName = argv[argc-2];
-		imuCalibFileName = argv[argc-1];
+		leftImageDirName = argv[2];
+		rightImageDirName = argv[3];
+		leftCalibFileName = argv[4];
+		rightCalibFileName = argv[5];
+		imuDataFileName = argv[6];
+		imuCalibFileName = argv[7];
 		parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
 		parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
 		if(raw)
@@ -497,7 +493,9 @@ int main(int argc, char * argv[])
 
 				OdometryEvent e(SensorData(), Transform(), odomInfo);
 				rtabmap.process(data, pose, covariance, e.velocity(), externalStats);
+                
 				covariance = cv::Mat();
+			   
 			}
 
 			++iteration;
@@ -537,6 +535,7 @@ int main(int argc, char * argv[])
 								iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.inliers, odomInfo.features, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f));
 					}
 				}
+
 				if(processData && rtabmap.getLoopClosureId()>0)
 				{
 					printf(" *");
@@ -554,6 +553,7 @@ int main(int argc, char * argv[])
 			data = cameraThread.camera()->takeImage(&cameraInfo);
 		}
 		delete odom;
+
 		printf("Total time=%fs\n", totalTime.ticks());
 		/////////////////////////////
 		// Processing dataset end
@@ -573,7 +573,7 @@ int main(int argc, char * argv[])
 		{
 			stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
 		}
-		std::string pathTrajectory = output+"/"+outputName+"_poses.txt";
+		std::string pathTrajectory = output + outputName + "_poses.txt";
 		if(poses.size() && graph::exportPoses(pathTrajectory, 10, poses, links, stamps))
 		{
 			printf("Saving %s... done!\n", pathTrajectory.c_str());

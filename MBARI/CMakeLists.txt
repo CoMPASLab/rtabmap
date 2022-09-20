@@ -16,17 +16,23 @@ ENDIF(NOT yaml-cpp_FOUND)
 
 IF(yaml-cpp_FOUND)
 
-# inside rtabmap project (see below for external build)
 SET(RTABMap_INCLUDE_DIRS 
     ${PROJECT_BINARY_DIR}/corelib/include
     ${PROJECT_SOURCE_DIR}/utilite/include
 	${PROJECT_SOURCE_DIR}/corelib/include
+    ${PROJECT_SOURCE_DIR}/guilib/include
 )
 SET(RTABMap_LIBRARIES 
     rtabmap_core
+    rtabmap_gui
 	rtabmap_utilite
 )  
 	
+# Find Qt5 first
+FIND_PACKAGE(Qt5 COMPONENTS Widgets Core Gui Svg QUIET)
+IF(NOT Qt5_FOUND)
+    FIND_PACKAGE(Qt4 COMPONENTS QtCore QtGui QtSvg)
+ENDIF(NOT Qt5_FOUND)
 if(POLICY CMP0020)
 	cmake_policy(SET CMP0020 NEW)
 endif()
@@ -38,6 +44,10 @@ SET(INCLUDE_DIRS
     ${YAML_CPP_INCLUDE_DIRS}
 )
 
+IF(QT4_FOUND)
+    INCLUDE(${QT_USE_FILE})
+ENDIF(QT4_FOUND)
+
 SET(LIBRARIES
 	${RTABMap_LIBRARIES}
 	${OpenCV_LIBRARIES}
@@ -47,14 +57,24 @@ SET(LIBRARIES
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS})
 
-ADD_EXECUTABLE(mbari main.cpp)
+IF(QT4_FOUND)
+    QT4_WRAP_CPP(moc_srcs MapBuilder.h)
+ELSE()
+    QT5_WRAP_CPP(moc_srcs MapBuilder.h)
+ENDIF()
+
+ADD_EXECUTABLE(mbari mbari.cpp)
+ADD_EXECUTABLE(mbari-gui mbari-gui.cpp ${moc_srcs})
   
 TARGET_LINK_LIBRARIES(mbari ${LIBRARIES})
+TARGET_LINK_LIBRARIES(mbari-gui ${LIBRARIES} ${QT_LIBRARIES})
 
 SET_TARGET_PROPERTIES( mbari 
     PROPERTIES OUTPUT_NAME ${PROJECT_PREFIX}-mbari)
+SET_TARGET_PROPERTIES( mbari-gui 
+    PROPERTIES OUTPUT_NAME ${PROJECT_PREFIX}-mbari-gui)
     
-INSTALL(TARGETS mbari
+INSTALL(TARGETS mbari mbari-gui
 	RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime
 	BUNDLE DESTINATION "${CMAKE_BUNDLE_LOCATION}" COMPONENT runtime)
 	
