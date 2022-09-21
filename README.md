@@ -36,8 +36,14 @@ If you plan to download the target data on the host, add a `-v` flag to the scri
 ## Usage
 
 ```
-./rtabmap-mbari path/to/your/euroc/format/data/folder
+./rtabmap-mbari DATASET_ROOT_PATH LEFT_IMAGE_FOLDER RIGHT_IMAGE_FOLDER LEFT_CALIB_YAML RIGHT_CALIB_YAML  
 ```
+or 
+```
+./rtabmap-mbari DATASET_ROOT_PATH LEFT_IMAGE_FOLDER RIGHT_IMAGE_FOLDER LEFT_CALIB_YAML RIGHT_CALIB_YAML IMU_CSV_FILE IMU_CALIB_YAML  
+```
+
+See the scripts in MBARI folder for examples.
 
 ## Other
 
