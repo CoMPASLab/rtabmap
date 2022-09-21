@@ -54,9 +54,13 @@ void showUsage()
 {
 	printf("\nUsage:\n"
 			"rtabmap-mbari [options] path\n"
-			"  path               Folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
-			"                        containing least mav0/cam0/sensor.yaml, mav0/cam1/sensor.yaml and \n"
-			"                        mav0/cam0/data and mav0/cam1/data folders.\n"
+			"  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
+			"  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
+			"  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
+			"  left_calib_file    Left camera calib YAML (e.g., \"left_calib.yaml\")\n"
+			"  right_calib_file   Right camera calib YAML (e.g., \"right_calib.yaml\")\n"
+			"  imu_data_file      IMU data file (optional) (e.g., \"imu.csv\")\n"
+			"  imu_calib_file     IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
 			"  --output           Output directory. By default, results are saved in \"path\".\n"
 			"  --output_name      Output database name (default \"rtabmap\").\n"
 			"  --quiet            Don't show log messages and iteration updates.\n"
@@ -100,13 +104,15 @@ int main(int argc, char * argv[])
 	std::string rightImageDirName;
 	std::string leftCalibFileName;
 	std::string rightCalibFileName;
-	std::string imuDataFileName;
-	std::string imuCalibFileName;
+	std::string imuDataFileName = "";
+	std::string imuCalibFileName = "";
 	bool disp = false;
 	bool raw = false;
 	bool exposureCompensation = false;
 	bool quiet = false;
 	int imuFilter = 1;
+
+    bool useImu = false;
 
 	if(argc < 2)
 	{
@@ -114,31 +120,39 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
+        // Could come up with some better way to do this eventually...
+        int offset = 0;
 		for(int i=1; i<argc; ++i)
 		{
 			if(std::strcmp(argv[i], "--output") == 0)
 			{
 				output = argv[++i];
+                offset++;
 			}
 			else if(std::strcmp(argv[i], "--output_name") == 0)
 			{
 				outputName = argv[++i];
+                offset++;
 			}
 			else if(std::strcmp(argv[i], "--quiet") == 0)
 			{
 				quiet = true;
+                offset++;
 			}
 			else if(std::strcmp(argv[i], "--disp") == 0)
 			{
 				disp = true;
+                offset++;
 			}
 			else if(std::strcmp(argv[i], "--raw") == 0)
 			{
 				raw = true;
+                offset++;
 			}
 			else if(std::strcmp(argv[i], "--exposure_comp") == 0)
 			{
 				exposureCompensation = true;
+                offset++;
 			}
 		}
 		parameters = Parameters::parseArguments(argc, argv);
@@ -158,8 +172,14 @@ int main(int argc, char * argv[])
 		rightImageDirName = argv[3];
 		leftCalibFileName = argv[4];
 		rightCalibFileName = argv[5];
-		imuDataFileName = argv[6];
-		imuCalibFileName = argv[7];
+        if (argc - offset == 8) {
+            imuDataFileName = argv[6];
+            imuCalibFileName = argv[7];
+            useImu = true;
+        } else 
+        {
+            printf("IMU disabled as params were not provided\n");
+        }
 		parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
 		parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
 		if(raw)
@@ -184,9 +204,7 @@ int main(int argc, char * argv[])
 			"   left images:      %s\n"
 			"   right images:     %s\n"
 			"   left calib:       %s\n"
-			"   right calib:      %s\n"
-			"   imu data:         %s\n"
-			"   imu calib:        %s\n",
+			"   right calib:      %s\n",
 			seq.c_str(),
 			path.c_str(),
 			output.c_str(),
@@ -194,13 +212,12 @@ int main(int argc, char * argv[])
 			pathLeftImages.c_str(),
 			pathRightImages.c_str(),
 			pathCalibLeft.c_str(),
-			pathCalibRight.c_str(),
-			pathImuData.c_str(),
-			pathImuCalib.c_str());
-	if(!pathImuData.empty())
+			pathCalibRight.c_str());
+	if(useImu)
 	{
-		printf("   IMU:              %s\n", pathImuData.c_str());
-		printf("   IMU Filter:       %d\n", imuFilter);
+		printf("   IMU data:         %s\n", pathImuData.c_str());
+	    printf("   IMU calib:        %s\n", pathImuCalib.c_str());
+		printf("   IMU filter:       %d\n", imuFilter);
 	}
 
 	printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
@@ -281,23 +298,27 @@ int main(int argc, char * argv[])
 		ULogger::setLevel(ULogger::kError);
 	}
 
-	// We use CameraThread only to use postUpdate() method
+    Transform baseToImu;
 
-    // Load IMU calibration
-    YAML::Node config = YAML::LoadFile(pathImuCalib);
-    if(config.IsNull())
-    {
-        UERROR("Cannot open IMU calibration file \"%s\"", pathImuCalib.c_str());
-        return -1;
+    if (useImu) {
+        // Load IMU calibration
+        YAML::Node config = YAML::LoadFile(pathImuCalib);
+        if(config.IsNull())
+        {
+            UERROR("Cannot open IMU calibration file \"%s\"", pathImuCalib.c_str());
+            return -1;
+        }
+
+        YAML::Node T_BS = config["T_BS"];
+        YAML::Node data = T_BS["data"];
+        UASSERT(data.size() == 16);
+
+        baseToImu = {data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
+                     data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
+                     data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
 
-    YAML::Node T_BS = config["T_BS"];
-    YAML::Node data = T_BS["data"];
-    UASSERT(data.size() == 16);
-
-    Transform baseToImu(data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
-                data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
-                data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>());
+	// We use CameraThread only to use postUpdate() method
 
 	CameraThread cameraThread(new
 		CameraStereoImages(
@@ -333,9 +354,9 @@ int main(int argc, char * argv[])
 		mapUpdate = 1;
 	}
 
-	std::string databasePath = output+"/"+outputName+".db";
+	std::string databasePath = output + outputName + ".db";
 	UFile::erase(databasePath);
-	if(cameraThread.camera()->init(output, outputName+"_calib"))
+	if(cameraThread.camera()->init(output, outputName + "_calib"))
 	{
 		int totalImages = (int)((CameraStereoImages*)cameraThread.camera())->filenames().size();
 
@@ -345,29 +366,33 @@ int main(int argc, char * argv[])
 		odomParameters.erase(Parameters::kRtabmapPublishRAMUsage()); // as odometry is in the same process than rtabmap, don't get RAM usage in odometry.
 		Odometry * odom = Odometry::create(odomParameters);
 
-		std::ifstream imu_file;
+        std::ifstream imu_file;
 
-		// open the IMU file
-		std::string line;
-		imu_file.open(pathImuData.c_str());
-		if (!imu_file.good()) {
-			UERROR("no imu file found at %s",pathImuData.c_str());
-			return -1;
-		}
-		int number_of_lines = 0;
-		while (std::getline(imu_file, line))
-			++number_of_lines;
-		printf("No. IMU measurements: %d\n", number_of_lines-1);
-		if (number_of_lines - 1 <= 0) {
-			UERROR("no imu messages present in %s", pathImuData.c_str());
-			return -1;
-		}
-		// set reading position to second line
-		imu_file.clear();
-		imu_file.seekg(0, std::ios::beg);
-		std::getline(imu_file, line);
+        if (useImu) 
+        {
 
-		cameraThread.enableIMUFiltering(imuFilter, parameters);
+            // open the IMU file
+            std::string line;
+            imu_file.open(pathImuData.c_str());
+            if (!imu_file.good()) {
+                UERROR("no imu file found at %s",pathImuData.c_str());
+                return -1;
+            }
+            int number_of_lines = 0;
+            while (std::getline(imu_file, line))
+                ++number_of_lines;
+            printf("No. IMU measurements: %d\n", number_of_lines-1);
+            if (number_of_lines - 1 <= 0) {
+                UERROR("no imu messages present in %s", pathImuData.c_str());
+                return -1;
+            }
+            // set reading position to second line
+            imu_file.clear();
+            imu_file.seekg(0, std::ios::beg);
+            std::getline(imu_file, line);
+
+            cameraThread.enableIMUFiltering(imuFilter, parameters);
+        }
 
 		Rtabmap rtabmap;
 		rtabmap.init(parameters, databasePath);
@@ -389,44 +414,47 @@ int main(int argc, char * argv[])
 		while(data.isValid() && g_forever)
 		{
 			UDEBUG("");
-			// get all IMU measurements till then
-			double t_imu = start;
-			do {
-				std::string line;
-				if (!std::getline(imu_file, line)) {
-					std::cout << std::endl << "Finished parsing IMU." << std::endl << std::flush;
-					break;
-				}
+            
+            if (useImu) 
+            {
+                // get all IMU measurements till then
+                double t_imu = start;
+                do {
+                    std::string line;
+                    if (!std::getline(imu_file, line)) {
+                        std::cout << std::endl << "Finished parsing IMU." << std::endl << std::flush;
+                        break;
+                    }
 
-				std::stringstream stream(line);
-				std::string s;
-				std::getline(stream, s, ',');
-				std::string nanoseconds = s.substr(s.size() - 9, 9);
-				std::string seconds = s.substr(0, s.size() - 9);
+                    std::stringstream stream(line);
+                    std::string s;
+                    std::getline(stream, s, ',');
+                    std::string nanoseconds = s.substr(s.size() - 9, 9);
+                    std::string seconds = s.substr(0, s.size() - 9);
 
-				cv::Vec3d gyr;
-				for (int j = 0; j < 3; ++j) {
-					std::getline(stream, s, ',');
-					gyr[j] = uStr2Double(s);
-				}
+                    cv::Vec3d gyr;
+                    for (int j = 0; j < 3; ++j) {
+                        std::getline(stream, s, ',');
+                        gyr[j] = uStr2Double(s);
+                    }
 
-				cv::Vec3d acc;
-				for (int j = 0; j < 3; ++j) {
-					std::getline(stream, s, ',');
-					acc[j] = uStr2Double(s);
-				}
+                    cv::Vec3d acc;
+                    for (int j = 0; j < 3; ++j) {
+                        std::getline(stream, s, ',');
+                        acc[j] = uStr2Double(s);
+                    }
 
-				t_imu = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+                    t_imu = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
 
-				if (t_imu - start + 1 > 0) {
+                    if (t_imu - start + 1 > 0) {
 
-					SensorData dataImu(IMU(gyr, cv::Mat(3,3,CV_64FC1), acc, cv::Mat(3,3,CV_64FC1), baseToImu), 0, t_imu);
-					cameraThread.postUpdate(&dataImu);
-					odom->process(dataImu);
-				}
+                        SensorData dataImu(IMU(gyr, cv::Mat(3,3,CV_64FC1), acc, cv::Mat(3,3,CV_64FC1), baseToImu), 0, t_imu);
+                        cameraThread.postUpdate(&dataImu);
+                        odom->process(dataImu);
+                    }
 
-			} while (t_imu <= data.stamp());
-
+                } while (t_imu <= data.stamp());
+            }
 
 			cameraThread.postUpdate(&data, &cameraInfo);
 			cameraInfo.timeTotal = timer.ticks();
@@ -588,9 +616,9 @@ int main(int argc, char * argv[])
 		UERROR("Camera init failed!");
 	}
 
-	printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output+"/"+outputName+".db").c_str());
+	printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output + outputName+".db").c_str());
 	printf("Do:\n"
-			" $ rtabmap-databaseViewer %s\n\n", (output+"/"+outputName+".db").c_str());
+			" $ rtabmap-databaseViewer %s\n\n", (output  +outputName+".db").c_str());
 
 	return 0;
 }
