@@ -48,6 +48,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <signal.h>
 #include <fstream>
 
+#ifdef BUILD_WITH_3D_MAPPING
+  #include "MapBuilder.h"
+  #include <QApplication>
+#endif
+
 using namespace rtabmap;
 
 void showUsage()
@@ -406,6 +411,13 @@ int main(int argc, char * argv[])
 		int iteration = 0;
 		double start = data.stamp();
 
+#ifdef BUILD_WITH_3D_MAPPING
+        printf("Starting 3D mapping\n");
+        QApplication app(argc, argv);
+        MapBuilder mapBuilder;
+        mapBuilder.show();
+        QApplication::processEvents();
+#endif
 		/////////////////////////////
 		// Processing dataset begin
 		/////////////////////////////
@@ -520,7 +532,17 @@ int main(int argc, char * argv[])
 				externalStats.insert(std::make_pair("Odometry/LocalScanMapSize/", odomInfo.localScanMapSize));
 
 				OdometryEvent e(SensorData(), Transform(), odomInfo);
-				rtabmap.process(data, pose, covariance, e.velocity(), externalStats);
+				if (rtabmap.process(data, pose, covariance, e.velocity(), externalStats)) {
+#ifdef BUILD_WITH_3D_MAPPING
+                    // Map processing
+                    mapBuilder.processStatistics(rtabmap.getStatistics());
+#endif
+
+                    if(rtabmap.getLoopClosureId() > 0)
+                    {
+                        printf("Loop closure detected!\n");
+                    }
+                }
                 
 				covariance = cv::Mat();
 			   
@@ -569,6 +591,9 @@ int main(int argc, char * argv[])
 					printf(" *");
 				}
 				printf("\n");
+#ifdef BUILD_WITH_3D_MAPPING
+                mapBuilder.processOdometry(data, pose, odomInfo);
+#endif
 			}
 			else if(iteration % (totalImages/10) == 0)
 			{
@@ -576,11 +601,30 @@ int main(int argc, char * argv[])
 				fflush(stdout);
 			}
 
+#ifdef BUILD_WITH_3D_MAPPING
+            // Draw map
+            QApplication::processEvents();
+
+            while(mapBuilder.isPaused() && mapBuilder.isVisible())
+            {
+                uSleep(100);
+                QApplication::processEvents();
+            }
+#endif
+
 			cameraInfo = CameraInfo();
 			timer.restart();
 			data = cameraThread.camera()->takeImage(&cameraInfo);
 		}
 		delete odom;
+
+#ifdef BUILD_WITH_3D_MAPPING
+		if(mapBuilder.isVisible())
+		{
+			printf("Processed all frames\n");
+			app.exec();
+		}
+#endif
 
 		printf("Total time=%fs\n", totalTime.ticks());
 		/////////////////////////////
