@@ -2,7 +2,7 @@
 
 xhost +local:root
 
-docker run -it \
+docker run -it --rm \
     --name rtabmap \
     --privileged \
     -e "DISPLAY=$DISPLAY" \
