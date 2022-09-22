@@ -9,7 +9,7 @@ then
     xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
 fi
 
-docker run -it \
+docker run -it --rm \
     --name rtabmap \
     --privileged \
     -e "DISPLAY=$DISPLAY" \

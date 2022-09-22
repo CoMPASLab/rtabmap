@@ -175,7 +175,7 @@ public:
 					// Add the new cloud
 					pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = util3d::cloudRGBFromSensorData(
 							s.sensorData(),
-							4,     // decimation
+							12,     // decimation
 							4.0f); // max depth
 					if(cloud->size())
 					{
