@@ -158,8 +158,8 @@ IF(APPLE OR WIN32)
     OPTION(BUILD_AS_BUNDLE "Set to ON to build as bundle with all embedded dependencies (DragNDrop for Mac, installer for Windows)" OFF)
 ENDIF(APPLE OR WIN32)
 OPTION(BUILD_APP "Build main application" ON)
-OPTION(BUILD_TOOLS "Build tools" ON)
-OPTION(BUILD_EXAMPLES "Build examples" ON)
+OPTION(BUILD_TOOLS "Build tools" OFF)
+OPTION(BUILD_EXAMPLES "Build examples" OFF)
 
 ####### DEPENDENCIES #######
 IF(MOBILE_BUILD)
