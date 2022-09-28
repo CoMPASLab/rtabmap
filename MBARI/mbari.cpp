@@ -26,7 +26,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <rtabmap/core/Odometry.h>
+#include "rtabmap/core/Odometry.h"
 #include "rtabmap/core/Rtabmap.h"
 #include "rtabmap/core/CameraStereo.h"
 #include "rtabmap/core/CameraThread.h"
@@ -64,8 +64,8 @@ void showUsage()
 			"  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
 			"  left_calib_file    Left camera calib YAML (e.g., \"left_calib.yaml\")\n"
 			"  right_calib_file   Right camera calib YAML (e.g., \"right_calib.yaml\")\n"
-			"  imu_data_file      IMU data file (optional) (e.g., \"imu.csv\")\n"
-			"  imu_calib_file     IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
+			"  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
+			"  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
 			"  --output           Output directory. By default, results are saved in \"path\".\n"
 			"  --output_name      Output database name (default \"rtabmap\").\n"
 			"  --quiet            Don't show log messages and iteration updates.\n"
@@ -125,39 +125,39 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-        // Could come up with some better way to do this eventually...
-        int offset = 0;
 		for(int i=1; i<argc; ++i)
 		{
 			if(std::strcmp(argv[i], "--output") == 0)
 			{
 				output = argv[++i];
-                offset++;
 			}
 			else if(std::strcmp(argv[i], "--output_name") == 0)
 			{
 				outputName = argv[++i];
-                offset++;
 			}
 			else if(std::strcmp(argv[i], "--quiet") == 0)
 			{
 				quiet = true;
-                offset++;
 			}
 			else if(std::strcmp(argv[i], "--disp") == 0)
 			{
 				disp = true;
-                offset++;
 			}
 			else if(std::strcmp(argv[i], "--raw") == 0)
 			{
 				raw = true;
-                offset++;
 			}
 			else if(std::strcmp(argv[i], "--exposure_comp") == 0)
 			{
 				exposureCompensation = true;
-                offset++;
+			}
+			else if(std::strcmp(argv[i], "--imu_data_file") == 0)
+			{
+				imuDataFileName = argv[++i];
+			}
+			else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
+			{
+				imuCalibFileName = argv[++i];
 			}
 		}
 		parameters = Parameters::parseArguments(argc, argv);
@@ -177,11 +177,10 @@ int main(int argc, char * argv[])
 		rightImageDirName = argv[3];
 		leftCalibFileName = argv[4];
 		rightCalibFileName = argv[5];
-        if (argc - offset == 8) {
-            imuDataFileName = argv[6];
-            imuCalibFileName = argv[7];
+        if (!imuDataFileName.empty() && !imuCalibFileName.empty()) {
             useImu = true;
-        } else 
+        } 
+        else 
         {
             printf("IMU disabled as params were not provided\n");
         }
