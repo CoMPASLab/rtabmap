@@ -98,7 +98,7 @@ bash run-docker-container container.sh [-v <host_path>:<container_path>]
 ```
 or 
 ```
-./rtabmap-mbari DATASET_ROOT_PATH LEFT_IMAGE_FOLDER RIGHT_IMAGE_FOLDER LEFT_CALIB_YAML RIGHT_CALIB_YAML IMU_CSV_FILE IMU_CALIB_YAML  
+./rtabmap-mbari DATASET_ROOT_PATH LEFT_IMAGE_FOLDER RIGHT_IMAGE_FOLDER LEFT_CALIB_YAML RIGHT_CALIB_YAML --imu_data_file IMU_CSV_FILE --imu_calib_file IMU_CALIB_YAML  
 ```
 
 See the scripts in MBARI folder for examples.
