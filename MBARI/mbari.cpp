@@ -176,11 +176,10 @@ int main(int argc, char * argv[])
 		leftImageDirName = argv[2];
 		rightImageDirName = argv[3];
 		leftCalibFileName = argv[4];
-		rightCalibFileName = argv[5];
         if (!imuDataFileName.empty() && !imuCalibFileName.empty()) {
             useImu = true;
-        } 
-        else 
+        }
+        else
         {
             printf("IMU disabled as params were not provided\n");
         }
@@ -196,7 +195,6 @@ int main(int argc, char * argv[])
 	std::string pathLeftImages  = path + leftImageDirName;
 	std::string pathRightImages = path + rightImageDirName;
 	std::string pathCalibLeft = path + leftCalibFileName;
-	std::string pathCalibRight = path + rightCalibFileName;
 	std::string pathImuData = path + imuDataFileName;
 	std::string pathImuCalib = path + imuCalibFileName;
 
@@ -207,16 +205,14 @@ int main(int argc, char * argv[])
 			"   Output name:      %s\n"
 			"   left images:      %s\n"
 			"   right images:     %s\n"
-			"   left calib:       %s\n"
-			"   right calib:      %s\n",
+			"   left calib:       %s\n",
 			seq.c_str(),
 			path.c_str(),
 			output.c_str(),
 			outputName.c_str(),
 			pathLeftImages.c_str(),
 			pathRightImages.c_str(),
-			pathCalibLeft.c_str(),
-			pathCalibRight.c_str());
+			pathCalibLeft.c_str());
 	if(useImu)
 	{
 		printf("   IMU data:         %s\n", pathImuData.c_str());
@@ -238,71 +234,35 @@ int main(int argc, char * argv[])
 	}
 	printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
 
-	std::vector<CameraModel> models;
-	int rateHz = 20;
-    
 	// Load left and right calibration
-	for(int k=0; k<2; ++k)
-	{
-		std::string calibPath = k==0?pathCalibLeft:pathCalibRight;
-		YAML::Node config = YAML::LoadFile(calibPath);
-		if(config.IsNull())
-		{
-			UERROR("Cannot open calibration file \"%s\"", calibPath.c_str());
-			return -1;
-		}
+    YAML::Node config = YAML::LoadFile(pathCalibLeft);
+    if(config.IsNull())
+    {
+        UERROR("Cannot open calibration file \"%s\"", pathCalibLeft.c_str());
+        return -1;
+    }
 
-		YAML::Node T_BS = config["T_BS"];
-		YAML::Node data = T_BS["data"];
-		UASSERT(data.size() == 16);
-		rateHz = config["rate_hz"].as<float>();
-		YAML::Node resolution = config["resolution"];
-		UASSERT(resolution.size() == 2);
-		YAML::Node intrinsics = config["intrinsics"];
-		UASSERT(intrinsics.size() == 4);
-		YAML::Node distortion_coefficients = config["distortion_coefficients"];
-		UASSERT(distortion_coefficients.size() == 4 || distortion_coefficients.size() == 5 || distortion_coefficients.size() == 8);
+    YAML::Node T_BS = config["local_transform"];
+    YAML::Node data = T_BS["data"];
+    UASSERT(data.size() == 12);
+    float rateHz = config["rate_hz"].as<float>();
+    YAML::Node resolution = config["resolution"];
+    UASSERT(resolution.size() == 2);
 
-		cv::Mat K = cv::Mat::eye(3, 3, CV_64FC1);
-		K.at<double>(0,0) = intrinsics[0].as<double>();
-		K.at<double>(1,1) = intrinsics[1].as<double>();
-		K.at<double>(0,2) = intrinsics[2].as<double>();
-		K.at<double>(1,2) = intrinsics[3].as<double>();
-		cv::Mat R = cv::Mat::eye(3, 3, CV_64FC1);
-		cv::Mat P = cv::Mat::zeros(3, 4, CV_64FC1);
-		K.copyTo(cv::Mat(P, cv::Range(0,3), cv::Range(0,3)));
 
-		cv::Mat D = cv::Mat::zeros(1, distortion_coefficients.size(), CV_64FC1);
-		for(unsigned int i=0; i<distortion_coefficients.size(); ++i)
-		{
-			D.at<double>(i) = distortion_coefficients[i].as<double>();
-		}
-
-		Transform t(data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
-					data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
-					data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>());
-
-		models.push_back(CameraModel(outputName+"_calib", cv::Size(resolution[0].as<int>(),resolution[1].as<int>()), K, D, R, P, t));
-		UASSERT(models.back().isValidForRectification());
-	}
+    Transform t(data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
+                data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
+                data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>());
 
 	int odomStrategy = Parameters::defaultOdomStrategy();
 	Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
-
-	StereoCameraModel model(outputName+"_calib", models[0], models[1], models[1].localTransform().inverse() * models[0].localTransform());
-	if(!model.save(output, false))
-	{
-		UERROR("Could not save calibration!");
-		return -1;
-	}
-	printf("Saved calibration \"%s\" to \"%s\"\n", (outputName+"_calib").c_str(), output.c_str());
 
 	if(quiet)
 	{
 		ULogger::setLevel(ULogger::kError);
 	}
 
-    Transform baseToImu;
+    Transform baseToImu = {cv::Mat::eye(3,4,CV_64FC1)};
 
     if (useImu) {
         // Load IMU calibration
@@ -313,7 +273,7 @@ int main(int argc, char * argv[])
             return -1;
         }
 
-        YAML::Node T_BS = config["T_BS"];
+        YAML::Node T_BS = config["T_IMU"];
         YAML::Node data = T_BS["data"];
         UASSERT(data.size() == 16);
 
@@ -321,6 +281,8 @@ int main(int argc, char * argv[])
                      data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
                      data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
+
+    Transform local = t;
 
 	// We use CameraThread only to use postUpdate() method
 
@@ -330,13 +292,11 @@ int main(int argc, char * argv[])
 				pathRightImages,
 				!raw,
 				0.0f,
-				baseToImu*models[0].localTransform()*CameraModel::opticalRotation().inverse()), parameters);
-	printf("baseToImu=%s\n", baseToImu.prettyPrint().c_str());
-	std::cout<<"baseToCam0:\n" << baseToImu*models[0].localTransform()*CameraModel::opticalRotation().inverse() << std::endl;
-	printf("baseToCam0=%s\n", (baseToImu*models[0].localTransform()*CameraModel::opticalRotation().inverse()).prettyPrint().c_str());
-	std::cout<<"imuToCam0:\n" << models[0].localTransform() << std::endl;
-	printf("imuToCam0=%s\n", models[0].localTransform().prettyPrint().c_str());
-	printf("imuToCam1=%s\n", models[1].localTransform().prettyPrint().c_str());
+                baseToImu * local * CameraModel::opticalRotation().inverse()), parameters);
+    std::cout << "baseToImu:\n" << baseToImu << std::endl;
+	std::cout << "baseToCam0:\n" << local << std::endl;
+	std::cout << "imuToCam0:\n" << baseToImu.inverse()*local << std::endl;
+	std::cout << "SomeMysteryTransform:\n" << baseToImu * local * CameraModel::opticalRotation().inverse() << std::endl;
 	((CameraStereoImages*)cameraThread.camera())->setTimestamps(true, "", false);
 	if(exposureCompensation)
 	{
@@ -372,9 +332,8 @@ int main(int argc, char * argv[])
 
         std::ifstream imu_file;
 
-        if (useImu) 
+        if (useImu)
         {
-
             // open the IMU file
             std::string line;
             imu_file.open(pathImuData.c_str());
@@ -395,7 +354,7 @@ int main(int argc, char * argv[])
             imu_file.seekg(0, std::ios::beg);
             std::getline(imu_file, line);
 
-            cameraThread.enableIMUFiltering(imuFilter, parameters);
+            cameraThread.enableIMUFiltering(imuFilter, parameters, 1);
         }
 
 		Rtabmap rtabmap;
@@ -425,8 +384,8 @@ int main(int argc, char * argv[])
 		while(data.isValid() && g_forever)
 		{
 			UDEBUG("");
-            
-            if (useImu) 
+
+            if (useImu)
             {
                 // get all IMU measurements till then
                 double t_imu = start;
@@ -542,9 +501,9 @@ int main(int argc, char * argv[])
                         printf("Loop closure detected!\n");
                     }
                 }
-                
+
 				covariance = cv::Mat();
-			   
+
 			}
 
 			++iteration;
