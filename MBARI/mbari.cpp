@@ -62,8 +62,6 @@ void showUsage()
 			"  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
 			"  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
 			"  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
-			"  left_calib_file    Left camera calib YAML (e.g., \"left_calib.yaml\")\n"
-			"  right_calib_file   Right camera calib YAML (e.g., \"right_calib.yaml\")\n"
 			"  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
 			"  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
 			"  --output           Output directory. By default, results are saved in \"path\".\n"
@@ -107,12 +105,10 @@ int main(int argc, char * argv[])
 	std::string seq;
 	std::string leftImageDirName;
 	std::string rightImageDirName;
-	std::string leftCalibFileName;
-	std::string rightCalibFileName;
 	std::string imuDataFileName = "";
 	std::string imuCalibFileName = "";
 	bool disp = false;
-	bool raw = false;
+	bool raw = true;
 	bool exposureCompensation = false;
 	bool quiet = false;
 	int imuFilter = 1;
@@ -175,7 +171,6 @@ int main(int argc, char * argv[])
 		}
 		leftImageDirName = argv[2];
 		rightImageDirName = argv[3];
-		leftCalibFileName = argv[4];
         if (!imuDataFileName.empty() && !imuCalibFileName.empty()) {
             useImu = true;
         }
@@ -194,7 +189,6 @@ int main(int argc, char * argv[])
 	seq = uSplit(path, '/').back();
 	std::string pathLeftImages  = path + leftImageDirName;
 	std::string pathRightImages = path + rightImageDirName;
-	std::string pathCalibLeft = path + leftCalibFileName;
 	std::string pathImuData = path + imuDataFileName;
 	std::string pathImuCalib = path + imuCalibFileName;
 
@@ -204,15 +198,13 @@ int main(int argc, char * argv[])
 			"   Output:           %s\n"
 			"   Output name:      %s\n"
 			"   left images:      %s\n"
-			"   right images:     %s\n"
-			"   left calib:       %s\n",
+			"   right images:     %s\n",
 			seq.c_str(),
 			path.c_str(),
 			output.c_str(),
 			outputName.c_str(),
 			pathLeftImages.c_str(),
-			pathRightImages.c_str(),
-			pathCalibLeft.c_str());
+			pathRightImages.c_str());
 	if(useImu)
 	{
 		printf("   IMU data:         %s\n", pathImuData.c_str());
@@ -234,25 +226,20 @@ int main(int argc, char * argv[])
 	}
 	printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
 
-	// Load left and right calibration
-    YAML::Node config = YAML::LoadFile(pathCalibLeft);
-    if(config.IsNull())
+    YAML::Node left_calib = YAML::LoadFile(path + outputName + "_calib_left.yaml");
+    if(left_calib.IsNull())
     {
-        UERROR("Cannot open calibration file \"%s\"", pathCalibLeft.c_str());
+        UERROR("Cannot open calibration file \"%s\"", (path + outputName + "_calib_left.yaml").c_str());
         return -1;
     }
 
-    YAML::Node T_BS = config["local_transform"];
-    YAML::Node data = T_BS["data"];
-    UASSERT(data.size() == 12);
-    float rateHz = config["rate_hz"].as<float>();
-    YAML::Node resolution = config["resolution"];
-    UASSERT(resolution.size() == 2);
-
-
-    Transform t(data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
-                data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
-                data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>());
+    UASSERT(left_calib["rate_hz"]);
+    float rateHz = left_calib["rate_hz"].as<float>();
+    YAML::Node local = left_calib["local_transform"]["data"];
+    UASSERT(local.size() == 12);
+    Transform baseToCam0(local[0].as<float>(), local[1].as<float>(), local[2].as<float>(), local[3].as<float>(),
+                local[4].as<float>(), local[5].as<float>(), local[6].as<float>(), local[7].as<float>(),
+                local[8].as<float>(), local[9].as<float>(), local[10].as<float>(), local[11].as<float>());
 
 	int odomStrategy = Parameters::defaultOdomStrategy();
 	Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
@@ -282,8 +269,6 @@ int main(int argc, char * argv[])
                      data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
 
-    Transform local = t;
-
 	// We use CameraThread only to use postUpdate() method
 
 	CameraThread cameraThread(new
@@ -292,11 +277,10 @@ int main(int argc, char * argv[])
 				pathRightImages,
 				!raw,
 				0.0f,
-                baseToImu * local * CameraModel::opticalRotation().inverse()), parameters);
+                baseToCam0 * CameraModel::opticalRotation().inverse()), parameters);
     std::cout << "baseToImu:\n" << baseToImu << std::endl;
-	std::cout << "baseToCam0:\n" << local << std::endl;
-	std::cout << "imuToCam0:\n" << baseToImu.inverse()*local << std::endl;
-	std::cout << "SomeMysteryTransform:\n" << baseToImu * local * CameraModel::opticalRotation().inverse() << std::endl;
+	std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
+	std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
 	((CameraStereoImages*)cameraThread.camera())->setTimestamps(true, "", false);
 	if(exposureCompensation)
 	{
@@ -354,7 +338,7 @@ int main(int argc, char * argv[])
             imu_file.seekg(0, std::ios::beg);
             std::getline(imu_file, line);
 
-            cameraThread.enableIMUFiltering(imuFilter, parameters, 1);
+            cameraThread.enableIMUFiltering(imuFilter, parameters);
         }
 
 		Rtabmap rtabmap;
