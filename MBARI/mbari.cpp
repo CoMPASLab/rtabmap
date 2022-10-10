@@ -66,6 +66,7 @@ void showUsage()
 			"  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
 			"  --output           Output directory. By default, results are saved in \"path\".\n"
 			"  --output_name      Output database name (default \"rtabmap\").\n"
+			"  --calib_prefix     Calib file prefix (default \"rtabmap\").\n"
 			"  --quiet            Don't show log messages and iteration updates.\n"
 			"  --exposure_comp    Do exposure compensation between left and right images.\n"
 			"  --disp             Generate full disparity.\n"
@@ -102,6 +103,7 @@ int main(int argc, char * argv[])
 	std::string path;
 	std::string output;
 	std::string outputName = "rtabmap";
+	std::string calibPrefix = "rtabmap";
 	std::string seq;
 	std::string leftImageDirName;
 	std::string rightImageDirName;
@@ -130,6 +132,10 @@ int main(int argc, char * argv[])
 			else if(std::strcmp(argv[i], "--output_name") == 0)
 			{
 				outputName = argv[++i];
+			}
+			else if(std::strcmp(argv[i], "--calib_prefix") == 0)
+			{
+				calibPrefix = argv[++i];
 			}
 			else if(std::strcmp(argv[i], "--quiet") == 0)
 			{
@@ -197,12 +203,14 @@ int main(int argc, char * argv[])
 			"   Sequence path:    %s\n"
 			"   Output:           %s\n"
 			"   Output name:      %s\n"
+			"   Calib prefix:     %s\n"
 			"   left images:      %s\n"
 			"   right images:     %s\n",
 			seq.c_str(),
 			path.c_str(),
 			output.c_str(),
 			outputName.c_str(),
+			calibPrefix.c_str(),
 			pathLeftImages.c_str(),
 			pathRightImages.c_str());
 	if(useImu)
@@ -226,10 +234,10 @@ int main(int argc, char * argv[])
 	}
 	printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
 
-    YAML::Node left_calib = YAML::LoadFile(path + outputName + "_calib_left.yaml");
+    YAML::Node left_calib = YAML::LoadFile(path + calibPrefix + "_calib_left.yaml");
     if(left_calib.IsNull())
     {
-        UERROR("Cannot open calibration file \"%s\"", (path + outputName + "_calib_left.yaml").c_str());
+        UERROR("Cannot open calibration file \"%s\"", (path + calibPrefix + "_calib_left.yaml").c_str());
         return -1;
     }
 
@@ -304,7 +312,7 @@ int main(int argc, char * argv[])
 
 	std::string databasePath = output + outputName + ".db";
 	UFile::erase(databasePath);
-	if(cameraThread.camera()->init(output, outputName + "_calib"))
+	if(cameraThread.camera()->init(output, calibPrefix + "_calib"))
 	{
 		int totalImages = (int)((CameraStereoImages*)cameraThread.camera())->filenames().size();
 
@@ -587,7 +595,7 @@ int main(int argc, char * argv[])
 		{
 			stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
 		}
-		std::string pathTrajectory = output + outputName + "_poses.txt";
+		std::string pathTrajectory = output + outputName + "-trajectory.txt";
 		if(poses.size() && graph::exportPoses(pathTrajectory, 10, poses, links, stamps))
 		{
 			printf("Saving %s... done!\n", pathTrajectory.c_str());
@@ -602,9 +610,9 @@ int main(int argc, char * argv[])
 		UERROR("Camera init failed!");
 	}
 
-	printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output + outputName+".db").c_str());
+	printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output + outputName + ".db").c_str());
 	printf("Do:\n"
-			" $ rtabmap-databaseViewer %s\n\n", (output  +outputName+".db").c_str());
+			" $ rtabmap-databaseViewer %s\n\n", (output + outputName + ".db").c_str());
 
 	return 0;
 }
