@@ -82,20 +82,9 @@ void showUsage()
 	exit(1);
 }
 
-// catch ctrl-c
-bool g_forever = true;
-void sighandler(int sig)
-{
-	printf("\nSignal %d caught...\n", sig);
-	g_forever = false;
-}
 
 int main(int argc, char * argv[])
 {
-	signal(SIGABRT, &sighandler);
-	signal(SIGTERM, &sighandler);
-	signal(SIGINT, &sighandler);
-
 	ULogger::setType(ULogger::kTypeConsole);
 	ULogger::setLevel(ULogger::kWarning);
 
@@ -373,7 +362,7 @@ int main(int argc, char * argv[])
 		/////////////////////////////
 		cv::Mat covariance;
 		int odomKeyFrames = 0;
-		while(data.isValid() && g_forever)
+		while(data.isValid())
 		{
 			UDEBUG("");
 
