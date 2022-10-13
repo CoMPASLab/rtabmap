@@ -83,8 +83,8 @@ int main(int argc, char * argv[])
 		printf(" Path = %s\n", path.c_str());
 	}
 
-	UDirectory dir(path, "jpg bmp png tiff jpeg");
-	UDirectory dirRight(pathRight, "jpg bmp png tiff jpeg");
+	UDirectory dir(path, "jpg bmp png tif tiff jpeg");
+	UDirectory dirRight(pathRight, "jpg bmp png tif tiff jpeg");
 	if(!dir.isValid() || (!pathRight.empty() && !dirRight.isValid()))
 	{
 		printf("Path invalid!\n");
