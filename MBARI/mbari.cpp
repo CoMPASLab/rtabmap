@@ -278,7 +278,7 @@ int main(int argc, char * argv[])
     std::cout << "baseToImu:\n" << baseToImu << std::endl;
 	std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
 	std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
-	((CameraStereoImages*)cameraThread.camera())->setTimestamps(true, "", false);
+	((CameraStereoImages*)cameraThread.camera())->setTimestamps(false, path + "image_timestamps.txt", false);
 	if(exposureCompensation)
 	{
 		cameraThread.setStereoExposureCompensation(true);
