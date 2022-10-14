@@ -420,15 +420,6 @@ int main(int argc, char * argv[])
 				++odomKeyFrames;
 			}
 
-			if(odomStrategy == Odometry::kTypeFovis)
-			{
-				//special case for FOVIS, set covariance 1 if 9999 is detected
-				if(!odomInfo.reg.covariance.empty() && odomInfo.reg.covariance.at<double>(0,0) >= 9999)
-				{
-					odomInfo.reg.covariance = cv::Mat::eye(6,6,CV_64FC1);
-				}
-			}
-
 			bool processData = true;
 			if(iteration % mapUpdate != 0)
 			{
