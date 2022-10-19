@@ -62,6 +62,7 @@ void showUsage()
 			"  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
 			"  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
 			"  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
+			"  --odometry_data_file Odometry filter data file (optional) (e.g., \"odom.csv\")\n"
 			"  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
 			"  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
 			"  --output           Output directory. By default, results are saved in \"path\".\n"
@@ -98,6 +99,7 @@ int main(int argc, char * argv[])
 	std::string rightImageDirName;
 	std::string imuDataFileName = "";
 	std::string imuCalibFileName = "";
+	std::string filterOdometryFileName = "";
 	bool disp = false;
 	bool raw = true;
 	bool exposureCompensation = false;
@@ -105,6 +107,7 @@ int main(int argc, char * argv[])
 	int imuFilter = 1;
 
     bool useImu = false;
+    bool useFilterOdometry = false;
 
 	if(argc < 2)
 	{
@@ -142,13 +145,17 @@ int main(int argc, char * argv[])
 			{
 				exposureCompensation = true;
 			}
-			else if(std::strcmp(argv[i], "--imu_data_file") == 0)
+			else if(std::strcmp(argv[i], "--odometry_data_file") == 0)
 			{
-				imuDataFileName = argv[++i];
+				filterOdometryFileName = argv[++i];
 			}
 			else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
 			{
 				imuCalibFileName = argv[++i];
+			}
+			else if(std::strcmp(argv[i], "--imu_data_file") == 0)
+			{
+				imuDataFileName = argv[++i];
 			}
 		}
 		parameters = Parameters::parseArguments(argc, argv);
@@ -166,12 +173,19 @@ int main(int argc, char * argv[])
 		}
 		leftImageDirName = argv[2];
 		rightImageDirName = argv[3];
-        if (!imuDataFileName.empty() && !imuCalibFileName.empty()) {
+        if (!filterOdometryFileName.empty())
+        {
+            useFilterOdometry = true;
+            printf("Using filter odometry data for pose guesses\n");
+        }
+        else if (!imuDataFileName.empty() && !imuCalibFileName.empty())
+        {
             useImu = true;
+            printf("Using IMU data for pose guesses\n");
         }
         else
         {
-            printf("IMU disabled as params were not provided\n");
+            printf("Not using IMU nor odometry as necessary params were not provided\n");
         }
 		parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
 		parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
@@ -184,6 +198,7 @@ int main(int argc, char * argv[])
 	seq = uSplit(path, '/').back();
 	std::string pathLeftImages  = path + leftImageDirName;
 	std::string pathRightImages = path + rightImageDirName;
+	std::string pathFilterOdometryData = path + filterOdometryFileName;
 	std::string pathImuData = path + imuDataFileName;
 	std::string pathImuCalib = path + imuCalibFileName;
 
@@ -207,6 +222,10 @@ int main(int argc, char * argv[])
 		printf("   IMU data:         %s\n", pathImuData.c_str());
 	    printf("   IMU calib:        %s\n", pathImuCalib.c_str());
 		printf("   IMU filter:       %d\n", imuFilter);
+	}
+	if(useFilterOdometry)
+	{
+		printf("   Odometry data:    %s\n", pathFilterOdometryData.c_str());
 	}
 
 	printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
@@ -235,8 +254,8 @@ int main(int argc, char * argv[])
     YAML::Node local = left_calib["local_transform"]["data"];
     UASSERT(local.size() == 12);
     Transform baseToCam0(local[0].as<float>(), local[1].as<float>(), local[2].as<float>(), local[3].as<float>(),
-                local[4].as<float>(), local[5].as<float>(), local[6].as<float>(), local[7].as<float>(),
-                local[8].as<float>(), local[9].as<float>(), local[10].as<float>(), local[11].as<float>());
+                         local[4].as<float>(), local[5].as<float>(), local[6].as<float>(), local[7].as<float>(),
+                         local[8].as<float>(), local[9].as<float>(), local[10].as<float>(), local[11].as<float>());
 
 	int odomStrategy = Parameters::defaultOdomStrategy();
 	Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
@@ -338,6 +357,30 @@ int main(int argc, char * argv[])
             cameraThread.enableIMUFiltering(imuFilter, parameters);
         }
 
+        std::ifstream filter_odometry_file;
+
+        if (useFilterOdometry)
+        {
+            std::string line;
+            filter_odometry_file.open(pathFilterOdometryData.c_str());
+            if (!filter_odometry_file.good()) {
+                UERROR("no odom file found at %s",pathFilterOdometryData.c_str());
+                return -1;
+            }
+            int number_of_lines = 0;
+            while (std::getline(filter_odometry_file, line))
+                ++number_of_lines;
+            printf("No. odom measurements: %d\n", number_of_lines-1);
+            if (number_of_lines - 1 <= 0) {
+                UERROR("no odom messages present in %s", pathFilterOdometryData.c_str());
+                return -1;
+            }
+            // set reading position to second line
+            filter_odometry_file.clear();
+            filter_odometry_file.seekg(0, std::ios::beg);
+            std::getline(filter_odometry_file, line);
+        }
+
 		Rtabmap rtabmap;
 		rtabmap.init(parameters, databasePath);
 
@@ -362,9 +405,14 @@ int main(int argc, char * argv[])
 		/////////////////////////////
 		cv::Mat covariance;
 		int odomKeyFrames = 0;
+
+        Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
+
 		while(data.isValid())
 		{
 			UDEBUG("");
+
+            Transform newFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
 
             if (useImu)
             {
@@ -373,7 +421,7 @@ int main(int argc, char * argv[])
                 do {
                     std::string line;
                     if (!std::getline(imu_file, line)) {
-                        std::cout << std::endl << "Finished parsing IMU." << std::endl << std::flush;
+		                UINFO("\nFinished parsing IMU.");
                         break;
                     }
 
@@ -398,13 +446,41 @@ int main(int argc, char * argv[])
                     t_imu = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
 
                     if (t_imu - start + 1 > 0) {
-
                         SensorData dataImu(IMU(gyr, cv::Mat(3,3,CV_64FC1), acc, cv::Mat(3,3,CV_64FC1), baseToImu), 0, t_imu);
                         cameraThread.postUpdate(&dataImu);
                         odom->process(dataImu);
                     }
-
                 } while (t_imu <= data.stamp());
+            }
+            if (useFilterOdometry) 
+            {
+                double t_loc = start;
+                do {
+                    std::string line;
+                    if (!std::getline(filter_odometry_file, line)) {
+		                UINFO("\nFinished parsing localization data.\n");
+                        break;
+                    }
+
+                    std::stringstream stream(line);
+                    std::string s;
+                    std::getline(stream, s, ',');
+                    std::string nanoseconds = s.substr(s.size() - 9, 9);
+                    std::string seconds = s.substr(0, s.size() - 9);
+
+                    float odom[7];
+                    for (int j = 0; j < 7; ++j) {
+                        std::getline(stream, s, ',');
+                        odom[j] = uStr2Double(s);
+                    }
+
+                    t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+
+                    if (t_loc - start > 1) {
+                        newFilterOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
+                            odom[5], odom[6] };
+                    }
+                } while (t_loc <= data.stamp());
             }
 
 			cameraThread.postUpdate(&data, &cameraInfo);
@@ -412,7 +488,8 @@ int main(int argc, char * argv[])
 
 			OdometryInfo odomInfo;
 			UDEBUG("");
-			Transform pose = odom->process(data, &odomInfo);
+			Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
+            lastFilterOdometry = newFilterOdometry;
 			UDEBUG("");
 
 			if(odomInfo.keyFrameAdded)
