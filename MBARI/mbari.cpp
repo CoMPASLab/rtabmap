@@ -57,122 +57,122 @@ using namespace rtabmap;
 
 void showUsage()
 {
-	printf("\nUsage:\n"
-			"rtabmap-mbari [options] path\n"
-			"  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
-			"  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
-			"  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
-			"  --odometry_data_file Odometry filter data file (optional) (e.g., \"odom.csv\")\n"
-			"  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
-			"  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
-			"  --output           Output directory. By default, results are saved in \"path\".\n"
-			"  --output_name      Output database name (default \"rtabmap\").\n"
-			"  --calib_prefix     Calib file prefix (default \"rtabmap\").\n"
-			"  --quiet            Don't show log messages and iteration updates.\n"
-			"  --exposure_comp    Do exposure compensation between left and right images.\n"
-			"  --disp             Generate full disparity.\n"
-			"  --raw              Use raw images (not rectified, this only works with okvis, msckf or vins odometry).\n"
-			"%s\n"
-			"Example:\n\n"
-			"   $ rtabmap-mbari \\\n"
-			"       --Rtabmap/PublishRAMUsage true\\\n"
-			"       --Rtabmap/DetectionRate 2\\\n"
-			"       --RGBD/LinearUpdate 0\\\n"
-			"       --Mem/STMSize 30\\\n"
-			"       ~/mbari-datasets/SE/simulation_0038\n\n", rtabmap::Parameters::showUsage());
-	exit(1);
+    printf("\nUsage:\n"
+            "rtabmap-mbari [options] path\n"
+            "  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
+            "  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
+            "  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
+            "  --odometry_data_file Odometry filter data file (optional) (e.g., \"odom.csv\")\n"
+            "  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
+            "  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
+            "  --output           Output directory. By default, results are saved in \"path\".\n"
+            "  --output_name      Output database name (default \"rtabmap\").\n"
+            "  --calib_prefix     Calib file prefix (default \"rtabmap\").\n"
+            "  --quiet            Don't show log messages and iteration updates.\n"
+            "  --exposure_comp    Do exposure compensation between left and right images.\n"
+            "  --disp             Generate full disparity.\n"
+            "  --raw              Use raw images (not rectified, this only works with okvis, msckf or vins odometry).\n"
+            "%s\n"
+            "Example:\n\n"
+            "   $ rtabmap-mbari \\\n"
+            "       --Rtabmap/PublishRAMUsage true\\\n"
+            "       --Rtabmap/DetectionRate 2\\\n"
+            "       --RGBD/LinearUpdate 0\\\n"
+            "       --Mem/STMSize 30\\\n"
+            "       ~/mbari-datasets/SE/simulation_0038\n\n", rtabmap::Parameters::showUsage());
+    exit(1);
 }
 
 
 int main(int argc, char * argv[])
 {
-	ULogger::setType(ULogger::kTypeConsole);
-	ULogger::setLevel(ULogger::kWarning);
+    ULogger::setType(ULogger::kTypeConsole);
+    ULogger::setLevel(ULogger::kWarning);
 
-	ParametersMap parameters;
-	std::string path;
-	std::string output;
-	std::string outputName = "rtabmap";
-	std::string calibPrefix = "rtabmap";
-	std::string seq;
-	std::string leftImageDirName;
-	std::string rightImageDirName;
-	std::string imuDataFileName = "";
-	std::string imuCalibFileName = "";
-	std::string filterOdometryFileName = "";
-	bool disp = false;
-	bool raw = true;
-	bool exposureCompensation = false;
-	bool quiet = false;
-	int imuFilter = 1;
+    ParametersMap parameters;
+    std::string path;
+    std::string output;
+    std::string outputName = "rtabmap";
+    std::string calibPrefix = "rtabmap";
+    std::string seq;
+    std::string leftImageDirName;
+    std::string rightImageDirName;
+    std::string imuDataFileName = "";
+    std::string imuCalibFileName = "";
+    std::string filterOdometryFileName = "";
+    bool disp = false;
+    bool raw = true;
+    bool exposureCompensation = false;
+    bool quiet = false;
+    int imuFilter = 1;
 
     bool useImu = false;
     bool useFilterOdometry = false;
 
-	if(argc < 2)
-	{
-		showUsage();
-	}
-	else
-	{
-		for(int i=1; i<argc; ++i)
-		{
-			if(std::strcmp(argv[i], "--output") == 0)
-			{
-				output = argv[++i];
-			}
-			else if(std::strcmp(argv[i], "--output_name") == 0)
-			{
-				outputName = argv[++i];
-			}
-			else if(std::strcmp(argv[i], "--calib_prefix") == 0)
-			{
-				calibPrefix = argv[++i];
-			}
-			else if(std::strcmp(argv[i], "--quiet") == 0)
-			{
-				quiet = true;
-			}
-			else if(std::strcmp(argv[i], "--disp") == 0)
-			{
-				disp = true;
-			}
-			else if(std::strcmp(argv[i], "--raw") == 0)
-			{
-				raw = true;
-			}
-			else if(std::strcmp(argv[i], "--exposure_comp") == 0)
-			{
-				exposureCompensation = true;
-			}
-			else if(std::strcmp(argv[i], "--odometry_data_file") == 0)
-			{
-				filterOdometryFileName = argv[++i];
-			}
-			else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
-			{
-				imuCalibFileName = argv[++i];
-			}
-			else if(std::strcmp(argv[i], "--imu_data_file") == 0)
-			{
-				imuDataFileName = argv[++i];
-			}
-		}
-		parameters = Parameters::parseArguments(argc, argv);
-		path = argv[1];
-		path = uReplaceChar(path, '~', UDirectory::homeDir());
-		path = uReplaceChar(path, '\\', '/');
-		if(output.empty())
-		{
-			output = path;
-		}
-		else
-		{
-			output = uReplaceChar(output, '~', UDirectory::homeDir());
-			UDirectory::makeDir(output);
-		}
-		leftImageDirName = argv[2];
-		rightImageDirName = argv[3];
+    if(argc < 2)
+    {
+        showUsage();
+    }
+    else
+    {
+        for(int i=1; i<argc; ++i)
+        {
+            if(std::strcmp(argv[i], "--output") == 0)
+            {
+                output = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--output_name") == 0)
+            {
+                outputName = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--calib_prefix") == 0)
+            {
+                calibPrefix = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--quiet") == 0)
+            {
+                quiet = true;
+            }
+            else if(std::strcmp(argv[i], "--disp") == 0)
+            {
+                disp = true;
+            }
+            else if(std::strcmp(argv[i], "--raw") == 0)
+            {
+                raw = true;
+            }
+            else if(std::strcmp(argv[i], "--exposure_comp") == 0)
+            {
+                exposureCompensation = true;
+            }
+            else if(std::strcmp(argv[i], "--odometry_data_file") == 0)
+            {
+                filterOdometryFileName = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
+            {
+                imuCalibFileName = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--imu_data_file") == 0)
+            {
+                imuDataFileName = argv[++i];
+            }
+        }
+        parameters = Parameters::parseArguments(argc, argv);
+        path = argv[1];
+        path = uReplaceChar(path, '~', UDirectory::homeDir());
+        path = uReplaceChar(path, '\\', '/');
+        if(output.empty())
+        {
+            output = path;
+        }
+        else
+        {
+            output = uReplaceChar(output, '~', UDirectory::homeDir());
+            UDirectory::makeDir(output);
+        }
+        leftImageDirName = argv[2];
+        rightImageDirName = argv[3];
         if (!filterOdometryFileName.empty())
         {
             useFilterOdometry = true;
@@ -187,60 +187,60 @@ int main(int argc, char * argv[])
         {
             printf("Not using IMU nor odometry as necessary params were not provided\n");
         }
-		parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
-		parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
-		if(raw)
-		{
-			parameters.insert(ParametersPair(Parameters::kRtabmapImagesAlreadyRectified(), "false"));
-		}
-	}
+        parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
+        parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
+        if(raw)
+        {
+            parameters.insert(ParametersPair(Parameters::kRtabmapImagesAlreadyRectified(), "false"));
+        }
+    }
 
-	seq = uSplit(path, '/').back();
-	std::string pathLeftImages  = path + leftImageDirName;
-	std::string pathRightImages = path + rightImageDirName;
-	std::string pathFilterOdometryData = path + filterOdometryFileName;
-	std::string pathImuData = path + imuDataFileName;
-	std::string pathImuCalib = path + imuCalibFileName;
+    seq = uSplit(path, '/').back();
+    std::string pathLeftImages  = path + leftImageDirName;
+    std::string pathRightImages = path + rightImageDirName;
+    std::string pathFilterOdometryData = path + filterOdometryFileName;
+    std::string pathImuData = path + imuDataFileName;
+    std::string pathImuCalib = path + imuCalibFileName;
 
-	printf("Paths:\n"
-			"   Sequence number:  %s\n"
-			"   Sequence path:    %s\n"
-			"   Output:           %s\n"
-			"   Output name:      %s\n"
-			"   Calib prefix:     %s\n"
-			"   left images:      %s\n"
-			"   right images:     %s\n",
-			seq.c_str(),
-			path.c_str(),
-			output.c_str(),
-			outputName.c_str(),
-			calibPrefix.c_str(),
-			pathLeftImages.c_str(),
-			pathRightImages.c_str());
-	if(useImu)
-	{
-		printf("   IMU data:         %s\n", pathImuData.c_str());
-	    printf("   IMU calib:        %s\n", pathImuCalib.c_str());
-		printf("   IMU filter:       %d\n", imuFilter);
-	}
-	if(useFilterOdometry)
-	{
-		printf("   Odometry data:    %s\n", pathFilterOdometryData.c_str());
-	}
+    printf("Paths:\n"
+            "   Sequence number:  %s\n"
+            "   Sequence path:    %s\n"
+            "   Output:           %s\n"
+            "   Output name:      %s\n"
+            "   Calib prefix:     %s\n"
+            "   left images:      %s\n"
+            "   right images:     %s\n",
+            seq.c_str(),
+            path.c_str(),
+            output.c_str(),
+            outputName.c_str(),
+            calibPrefix.c_str(),
+            pathLeftImages.c_str(),
+            pathRightImages.c_str());
+    if(useImu)
+    {
+        printf("   IMU data:         %s\n", pathImuData.c_str());
+        printf("   IMU calib:        %s\n", pathImuCalib.c_str());
+        printf("   IMU filter:       %d\n", imuFilter);
+    }
+    if(useFilterOdometry)
+    {
+        printf("   Odometry data:    %s\n", pathFilterOdometryData.c_str());
+    }
 
-	printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
-	printf("   Disparity:        %s\n", disp?"true":"false");
-	printf("   Raw images:       %s\n", raw?"true (Rtabmap/ImagesAlreadyRectified set to false)":"false");
+    printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
+    printf("   Disparity:        %s\n", disp?"true":"false");
+    printf("   Raw images:       %s\n", raw?"true (Rtabmap/ImagesAlreadyRectified set to false)":"false");
 
-	if(!parameters.empty())
-	{
-		printf("Parameters:\n");
-		for(ParametersMap::iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
-		{
-			printf("   %s=%s\n", iter->first.c_str(), iter->second.c_str());
-		}
-	}
-	printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
+    if(!parameters.empty())
+    {
+        printf("Parameters:\n");
+        for(ParametersMap::iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
+        {
+            printf("   %s=%s\n", iter->first.c_str(), iter->second.c_str());
+        }
+    }
+    printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
 
     YAML::Node left_calib = YAML::LoadFile(path + calibPrefix + "_calib_left.yaml");
     if(left_calib.IsNull())
@@ -257,13 +257,13 @@ int main(int argc, char * argv[])
                          local[4].as<float>(), local[5].as<float>(), local[6].as<float>(), local[7].as<float>(),
                          local[8].as<float>(), local[9].as<float>(), local[10].as<float>(), local[11].as<float>());
 
-	int odomStrategy = Parameters::defaultOdomStrategy();
-	Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
+    int odomStrategy = Parameters::defaultOdomStrategy();
+    Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
 
-	if(quiet)
-	{
-		ULogger::setLevel(ULogger::kError);
-	}
+    if(quiet)
+    {
+        ULogger::setLevel(ULogger::kError);
+    }
 
     Transform baseToImu = {cv::Mat::eye(3,4,CV_64FC1)};
 
@@ -285,50 +285,50 @@ int main(int argc, char * argv[])
                      data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
 
-	// We use CameraThread only to use postUpdate() method
+    // We use CameraThread only to use postUpdate() method
 
-	CameraThread cameraThread(new
-		CameraStereoImages(
-				pathLeftImages,
-				pathRightImages,
-				!raw,
-				0.0f,
+    CameraThread cameraThread(new
+        CameraStereoImages(
+                pathLeftImages,
+                pathRightImages,
+                !raw,
+                0.0f,
                 baseToCam0 * CameraModel::opticalRotation().inverse()), parameters);
     std::cout << "baseToImu:\n" << baseToImu << std::endl;
-	std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
-	std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
-	((CameraStereoImages*)cameraThread.camera())->setTimestamps(false, path + "image_timestamps.txt", false);
-	if(exposureCompensation)
-	{
-		cameraThread.setStereoExposureCompensation(true);
-	}
-	if(disp)
-	{
-		cameraThread.setStereoToDepth(true);
-	}
+    std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
+    std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
+    ((CameraStereoImages*)cameraThread.camera())->setTimestamps(false, path + "image_timestamps.txt", false);
+    if(exposureCompensation)
+    {
+        cameraThread.setStereoExposureCompensation(true);
+    }
+    if(disp)
+    {
+        cameraThread.setStereoToDepth(true);
+    }
 
-	float detectionRate = Parameters::defaultRtabmapDetectionRate();
-	bool intermediateNodes = Parameters::defaultRtabmapCreateIntermediateNodes();
-	Parameters::parse(parameters, Parameters::kRtabmapDetectionRate(), detectionRate);
-	Parameters::parse(parameters, Parameters::kRtabmapCreateIntermediateNodes(), intermediateNodes);
+    float detectionRate = Parameters::defaultRtabmapDetectionRate();
+    bool intermediateNodes = Parameters::defaultRtabmapCreateIntermediateNodes();
+    Parameters::parse(parameters, Parameters::kRtabmapDetectionRate(), detectionRate);
+    Parameters::parse(parameters, Parameters::kRtabmapCreateIntermediateNodes(), intermediateNodes);
 
-	int mapUpdate = rateHz / detectionRate;
-	if(mapUpdate < 1)
-	{
-		mapUpdate = 1;
-	}
+    int mapUpdate = rateHz / detectionRate;
+    if(mapUpdate < 1)
+    {
+        mapUpdate = 1;
+    }
 
-	std::string databasePath = output + outputName + ".db";
-	UFile::erase(databasePath);
-	if(cameraThread.camera()->init(output, calibPrefix + "_calib"))
-	{
-		int totalImages = (int)((CameraStereoImages*)cameraThread.camera())->filenames().size();
+    std::string databasePath = output + outputName + ".db";
+    UFile::erase(databasePath);
+    if(cameraThread.camera()->init(output, calibPrefix + "_calib"))
+    {
+        int totalImages = (int)((CameraStereoImages*)cameraThread.camera())->filenames().size();
 
-		printf("Processing %d images...\n", totalImages);
+        printf("Processing %d images...\n", totalImages);
 
-		ParametersMap odomParameters = parameters;
-		odomParameters.erase(Parameters::kRtabmapPublishRAMUsage()); // as odometry is in the same process than rtabmap, don't get RAM usage in odometry.
-		Odometry * odom = Odometry::create(odomParameters);
+        ParametersMap odomParameters = parameters;
+        odomParameters.erase(Parameters::kRtabmapPublishRAMUsage()); // as odometry is in the same process than rtabmap, don't get RAM usage in odometry.
+        Odometry * odom = Odometry::create(odomParameters);
 
         std::ifstream imu_file;
 
@@ -381,17 +381,17 @@ int main(int argc, char * argv[])
             std::getline(filter_odometry_file, line);
         }
 
-		Rtabmap rtabmap;
-		rtabmap.init(parameters, databasePath);
+        Rtabmap rtabmap;
+        rtabmap.init(parameters, databasePath);
 
-		UTimer totalTime;
-		UTimer timer;
-		CameraInfo cameraInfo;
-		UDEBUG("");
-		SensorData data = cameraThread.camera()->takeImage(&cameraInfo);
-		UDEBUG("");
-		int iteration = 0;
-		double start = data.stamp();
+        UTimer totalTime;
+        UTimer timer;
+        CameraInfo cameraInfo;
+        UDEBUG("");
+        SensorData data = cameraThread.camera()->takeImage(&cameraInfo);
+        UDEBUG("");
+        int iteration = 0;
+        double start = data.stamp();
 
 #ifdef BUILD_WITH_3D_MAPPING
         printf("Starting 3D mapping\n");
@@ -400,17 +400,17 @@ int main(int argc, char * argv[])
         mapBuilder.show();
         QApplication::processEvents();
 #endif
-		/////////////////////////////
-		// Processing dataset begin
-		/////////////////////////////
-		cv::Mat covariance;
-		int odomKeyFrames = 0;
+        /////////////////////////////
+        // Processing dataset begin
+        /////////////////////////////
+        cv::Mat covariance;
+        int odomKeyFrames = 0;
 
         Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
 
-		while(data.isValid())
-		{
-			UDEBUG("");
+        while(data.isValid())
+        {
+            UDEBUG("");
 
             Transform newFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
 
@@ -421,7 +421,7 @@ int main(int argc, char * argv[])
                 do {
                     std::string line;
                     if (!std::getline(imu_file, line)) {
-		                UINFO("\nFinished parsing IMU.");
+                        UINFO("\nFinished parsing IMU.");
                         break;
                     }
 
@@ -458,7 +458,7 @@ int main(int argc, char * argv[])
                 do {
                     std::string line;
                     if (!std::getline(filter_odometry_file, line)) {
-		                UINFO("\nFinished parsing localization data.\n");
+                        UINFO("\nFinished parsing localization data.\n");
                         break;
                     }
 
@@ -483,63 +483,63 @@ int main(int argc, char * argv[])
                 } while (t_loc <= data.stamp());
             }
 
-			cameraThread.postUpdate(&data, &cameraInfo);
-			cameraInfo.timeTotal = timer.ticks();
+            cameraThread.postUpdate(&data, &cameraInfo);
+            cameraInfo.timeTotal = timer.ticks();
 
-			OdometryInfo odomInfo;
-			UDEBUG("");
-			Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
+            OdometryInfo odomInfo;
+            UDEBUG("");
+            Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
             lastFilterOdometry = newFilterOdometry;
-			UDEBUG("");
+            UDEBUG("");
 
-			if(odomInfo.keyFrameAdded)
-			{
-				++odomKeyFrames;
-			}
+            if(odomInfo.keyFrameAdded)
+            {
+                ++odomKeyFrames;
+            }
 
-			bool processData = true;
-			if(iteration % mapUpdate != 0)
-			{
-				// set negative id so rtabmap will detect it as an intermediate node
-				data.setId(-1);
-				data.setFeatures(std::vector<cv::KeyPoint>(), std::vector<cv::Point3f>(), cv::Mat());// remove features
-				processData = intermediateNodes;
-			}
-			if(covariance.empty() || odomInfo.reg.covariance.at<double>(0,0) > covariance.at<double>(0,0))
-			{
-				covariance = odomInfo.reg.covariance;
-			}
+            bool processData = true;
+            if(iteration % mapUpdate != 0)
+            {
+                // set negative id so rtabmap will detect it as an intermediate node
+                data.setId(-1);
+                data.setFeatures(std::vector<cv::KeyPoint>(), std::vector<cv::Point3f>(), cv::Mat());// remove features
+                processData = intermediateNodes;
+            }
+            if(covariance.empty() || odomInfo.reg.covariance.at<double>(0,0) > covariance.at<double>(0,0))
+            {
+                covariance = odomInfo.reg.covariance;
+            }
 
-			timer.restart();
-			if(processData)
-			{
-				std::map<std::string, float> externalStats;
-				// save camera statistics to database
-				externalStats.insert(std::make_pair("Camera/BilateralFiltering/ms", cameraInfo.timeBilateralFiltering*1000.0f));
-				externalStats.insert(std::make_pair("Camera/Capture/ms", cameraInfo.timeCapture*1000.0f));
-				externalStats.insert(std::make_pair("Camera/Disparity/ms", cameraInfo.timeDisparity*1000.0f));
-				externalStats.insert(std::make_pair("Camera/ImageDecimation/ms", cameraInfo.timeImageDecimation*1000.0f));
-				externalStats.insert(std::make_pair("Camera/Mirroring/ms", cameraInfo.timeMirroring*1000.0f));
-				externalStats.insert(std::make_pair("Camera/ExposureCompensation/ms", cameraInfo.timeStereoExposureCompensation*1000.0f));
-				externalStats.insert(std::make_pair("Camera/ScanFromDepth/ms", cameraInfo.timeScanFromDepth*1000.0f));
-				externalStats.insert(std::make_pair("Camera/TotalTime/ms", cameraInfo.timeTotal*1000.0f));
-				externalStats.insert(std::make_pair("Camera/UndistortDepth/ms", cameraInfo.timeUndistortDepth*1000.0f));
-				// save odometry statistics to database
-				externalStats.insert(std::make_pair("Odometry/LocalBundle/ms", odomInfo.localBundleTime*1000.0f));
-				externalStats.insert(std::make_pair("Odometry/LocalBundleConstraints/", odomInfo.localBundleConstraints));
-				externalStats.insert(std::make_pair("Odometry/LocalBundleOutliers/", odomInfo.localBundleOutliers));
-				externalStats.insert(std::make_pair("Odometry/TotalTime/ms", odomInfo.timeEstimation*1000.0f));
-				externalStats.insert(std::make_pair("Odometry/Registration/ms", odomInfo.reg.totalTime*1000.0f));
-				externalStats.insert(std::make_pair("Odometry/Inliers/", odomInfo.reg.inliers));
-				externalStats.insert(std::make_pair("Odometry/Features/", odomInfo.features));
-				externalStats.insert(std::make_pair("Odometry/DistanceTravelled/m", odomInfo.distanceTravelled));
-				externalStats.insert(std::make_pair("Odometry/KeyFrameAdded/", odomInfo.keyFrameAdded));
-				externalStats.insert(std::make_pair("Odometry/LocalKeyFrames/", odomInfo.localKeyFrames));
-				externalStats.insert(std::make_pair("Odometry/LocalMapSize/", odomInfo.localMapSize));
-				externalStats.insert(std::make_pair("Odometry/LocalScanMapSize/", odomInfo.localScanMapSize));
+            timer.restart();
+            if(processData)
+            {
+                std::map<std::string, float> externalStats;
+                // save camera statistics to database
+                externalStats.insert(std::make_pair("Camera/BilateralFiltering/ms", cameraInfo.timeBilateralFiltering*1000.0f));
+                externalStats.insert(std::make_pair("Camera/Capture/ms", cameraInfo.timeCapture*1000.0f));
+                externalStats.insert(std::make_pair("Camera/Disparity/ms", cameraInfo.timeDisparity*1000.0f));
+                externalStats.insert(std::make_pair("Camera/ImageDecimation/ms", cameraInfo.timeImageDecimation*1000.0f));
+                externalStats.insert(std::make_pair("Camera/Mirroring/ms", cameraInfo.timeMirroring*1000.0f));
+                externalStats.insert(std::make_pair("Camera/ExposureCompensation/ms", cameraInfo.timeStereoExposureCompensation*1000.0f));
+                externalStats.insert(std::make_pair("Camera/ScanFromDepth/ms", cameraInfo.timeScanFromDepth*1000.0f));
+                externalStats.insert(std::make_pair("Camera/TotalTime/ms", cameraInfo.timeTotal*1000.0f));
+                externalStats.insert(std::make_pair("Camera/UndistortDepth/ms", cameraInfo.timeUndistortDepth*1000.0f));
+                // save odometry statistics to database
+                externalStats.insert(std::make_pair("Odometry/LocalBundle/ms", odomInfo.localBundleTime*1000.0f));
+                externalStats.insert(std::make_pair("Odometry/LocalBundleConstraints/", odomInfo.localBundleConstraints));
+                externalStats.insert(std::make_pair("Odometry/LocalBundleOutliers/", odomInfo.localBundleOutliers));
+                externalStats.insert(std::make_pair("Odometry/TotalTime/ms", odomInfo.timeEstimation*1000.0f));
+                externalStats.insert(std::make_pair("Odometry/Registration/ms", odomInfo.reg.totalTime*1000.0f));
+                externalStats.insert(std::make_pair("Odometry/Inliers/", odomInfo.reg.inliers));
+                externalStats.insert(std::make_pair("Odometry/Features/", odomInfo.features));
+                externalStats.insert(std::make_pair("Odometry/DistanceTravelled/m", odomInfo.distanceTravelled));
+                externalStats.insert(std::make_pair("Odometry/KeyFrameAdded/", odomInfo.keyFrameAdded));
+                externalStats.insert(std::make_pair("Odometry/LocalKeyFrames/", odomInfo.localKeyFrames));
+                externalStats.insert(std::make_pair("Odometry/LocalMapSize/", odomInfo.localMapSize));
+                externalStats.insert(std::make_pair("Odometry/LocalScanMapSize/", odomInfo.localScanMapSize));
 
-				OdometryEvent e(SensorData(), Transform(), odomInfo);
-				if (rtabmap.process(data, pose, covariance, e.velocity(), externalStats)) {
+                OdometryEvent e(SensorData(), Transform(), odomInfo);
+                if (rtabmap.process(data, pose, covariance, e.velocity(), externalStats)) {
 #ifdef BUILD_WITH_3D_MAPPING
                     // Map processing
                     mapBuilder.processStatistics(rtabmap.getStatistics());
@@ -551,62 +551,62 @@ int main(int argc, char * argv[])
                     }
                 }
 
-				covariance = cv::Mat();
+                covariance = cv::Mat();
 
-			}
+            }
 
-			++iteration;
-			if(!quiet || iteration == totalImages)
-			{
-				double slamTime = timer.ticks();
+            ++iteration;
+            if(!quiet || iteration == totalImages)
+            {
+                double slamTime = timer.ticks();
 
-				float rmse = -1;
-				if(rtabmap.getStatistics().data().find(Statistics::kGtTranslational_rmse()) != rtabmap.getStatistics().data().end())
-				{
-					rmse = rtabmap.getStatistics().data().at(Statistics::kGtTranslational_rmse());
-				}
+                float rmse = -1;
+                if(rtabmap.getStatistics().data().find(Statistics::kGtTranslational_rmse()) != rtabmap.getStatistics().data().end())
+                {
+                    rmse = rtabmap.getStatistics().data().at(Statistics::kGtTranslational_rmse());
+                }
 
-				if(data.keypoints().size() == 0 && data.laserScanRaw().size())
-				{
-					if(rmse >= 0.0f)
-					{
-						printf("Iteration %d/%d: camera=%dms, odom(quality=%f, kfs=%d)=%dms, slam=%dms, rmse=%fm",
-								iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.icpInliersRatio, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f), rmse);
-					}
-					else
-					{
-						printf("Iteration %d/%d: camera=%dms, odom(quality=%f, kfs=%d)=%dms, slam=%dms",
-								iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.icpInliersRatio, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f));
-					}
-				}
-				else
-				{
-					if(rmse >= 0.0f)
-					{
-						printf("Iteration %d/%d: camera=%dms, odom(quality=%d/%d, kfs=%d)=%dms, slam=%dms, rmse=%fm",
-								iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.inliers, odomInfo.features, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f), rmse);
-					}
-					else
-					{
-						printf("Iteration %d/%d: camera=%dms, odom(quality=%d/%d, kfs=%d)=%dms, slam=%dms",
-								iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.inliers, odomInfo.features, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f));
-					}
-				}
+                if(data.keypoints().size() == 0 && data.laserScanRaw().size())
+                {
+                    if(rmse >= 0.0f)
+                    {
+                        printf("Iteration %d/%d: camera=%dms, odom(quality=%f, kfs=%d)=%dms, slam=%dms, rmse=%fm",
+                                iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.icpInliersRatio, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f), rmse);
+                    }
+                    else
+                    {
+                        printf("Iteration %d/%d: camera=%dms, odom(quality=%f, kfs=%d)=%dms, slam=%dms",
+                                iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.icpInliersRatio, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f));
+                    }
+                }
+                else
+                {
+                    if(rmse >= 0.0f)
+                    {
+                        printf("Iteration %d/%d: camera=%dms, odom(quality=%d/%d, kfs=%d)=%dms, slam=%dms, rmse=%fm",
+                                iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.inliers, odomInfo.features, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f), rmse);
+                    }
+                    else
+                    {
+                        printf("Iteration %d/%d: camera=%dms, odom(quality=%d/%d, kfs=%d)=%dms, slam=%dms",
+                                iteration, totalImages, int(cameraInfo.timeTotal*1000.0f), odomInfo.reg.inliers, odomInfo.features, odomKeyFrames, int(odomInfo.timeEstimation*1000.0f), int(slamTime*1000.0f));
+                    }
+                }
 
-				if(processData && rtabmap.getLoopClosureId()>0)
-				{
-					printf(" *");
-				}
-				printf("\n");
+                if(processData && rtabmap.getLoopClosureId()>0)
+                {
+                    printf(" *");
+                }
+                printf("\n");
 #ifdef BUILD_WITH_3D_MAPPING
                 mapBuilder.processOdometry(data, pose, odomInfo);
 #endif
-			}
-			else if(iteration % (totalImages/10) == 0)
-			{
-				printf(".");
-				fflush(stdout);
-			}
+            }
+            else if(iteration % (totalImages/10) == 0)
+            {
+                printf(".");
+                fflush(stdout);
+            }
 
 #ifdef BUILD_WITH_3D_MAPPING
             // Draw map
@@ -619,57 +619,57 @@ int main(int argc, char * argv[])
             }
 #endif
 
-			cameraInfo = CameraInfo();
-			timer.restart();
-			data = cameraThread.camera()->takeImage(&cameraInfo);
-		}
-		delete odom;
+            cameraInfo = CameraInfo();
+            timer.restart();
+            data = cameraThread.camera()->takeImage(&cameraInfo);
+        }
+        delete odom;
 
 #ifdef BUILD_WITH_3D_MAPPING
-		if(mapBuilder.isVisible())
-		{
-			printf("Processed all frames\n");
-			app.exec();
-		}
+        if(mapBuilder.isVisible())
+        {
+            printf("Processed all frames\n");
+            app.exec();
+        }
 #endif
 
-		printf("Total time=%fs\n", totalTime.ticks());
-		/////////////////////////////
-		// Processing dataset end
-		/////////////////////////////
+        printf("Total time=%fs\n", totalTime.ticks());
+        /////////////////////////////
+        // Processing dataset end
+        /////////////////////////////
 
-		// Save trajectory
-		printf("Saving trajectory ...\n");
-		std::map<int, Transform> poses;
-		std::map<int, Transform> vo_poses;
-		std::multimap<int, Link> links;
-		std::map<int, Signature> signatures;
-		std::map<int, double> stamps;
-		rtabmap.getGraph(vo_poses, links, false, true);
-		links.clear();
-		rtabmap.getGraph(poses, links, true, true, &signatures);
-		for(std::map<int, Signature>::iterator iter=signatures.begin(); iter!=signatures.end(); ++iter)
-		{
-			stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
-		}
-		std::string pathTrajectory = output + outputName + "-trajectory.txt";
-		if(poses.size() && graph::exportPoses(pathTrajectory, 10, poses, links, stamps))
-		{
-			printf("Saving %s... done!\n", pathTrajectory.c_str());
-		}
-		else
-		{
-			printf("Saving %s... failed!\n", pathTrajectory.c_str());
-		}
-	}
-	else
-	{
-		UERROR("Camera init failed!");
-	}
+        // Save trajectory
+        printf("Saving trajectory ...\n");
+        std::map<int, Transform> poses;
+        std::map<int, Transform> vo_poses;
+        std::multimap<int, Link> links;
+        std::map<int, Signature> signatures;
+        std::map<int, double> stamps;
+        rtabmap.getGraph(vo_poses, links, false, true);
+        links.clear();
+        rtabmap.getGraph(poses, links, true, true, &signatures);
+        for(std::map<int, Signature>::iterator iter=signatures.begin(); iter!=signatures.end(); ++iter)
+        {
+            stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
+        }
+        std::string pathTrajectory = output + outputName + "-trajectory.txt";
+        if(poses.size() && graph::exportPoses(pathTrajectory, 10, poses, links, stamps))
+        {
+            printf("Saving %s... done!\n", pathTrajectory.c_str());
+        }
+        else
+        {
+            printf("Saving %s... failed!\n", pathTrajectory.c_str());
+        }
+    }
+    else
+    {
+        UERROR("Camera init failed!");
+    }
 
-	printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output + outputName + ".db").c_str());
-	printf("Do:\n"
-			" $ rtabmap-databaseViewer %s\n\n", (output + outputName + ".db").c_str());
+    printf("Saving rtabmap database (with all statistics) to \"%s\"\n", (output + outputName + ".db").c_str());
+    printf("Do:\n"
+            " $ rtabmap-databaseViewer %s\n\n", (output + outputName + ".db").c_str());
 
-	return 0;
+    return 0;
 }
