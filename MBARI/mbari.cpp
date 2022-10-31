@@ -62,9 +62,9 @@ void showUsage()
             "  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
             "  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
             "  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
-            "  --odometry_data_file Odometry filter data file (optional) (e.g., \"odom.csv\")\n"
-            "  --imu_data_file    IMU data file (optional) (e.g., \"imu.csv\")\n"
-            "  --imu_calib_file   IMU calib YAML (optional) (e.g., \"imu_calib.yaml\")\n"
+            "  --odom_data_file   (Optional) Data file to be used as odometry guesses, must be in forward-left-up frame (e.g., \"odom.csv\")\n"
+            "  --imu_data_file    (Optional) IMU data file (e.g., \"imu.csv\")\n"
+            "  --imu_calib_file   (Optional) IMU calib YAML (e.g., \"imu_calib.yaml\")\n"
             "  --output           Output directory. By default, results are saved in \"path\".\n"
             "  --output_name      Output database name (default \"rtabmap\").\n"
             "  --calib_prefix     Calib file prefix (default \"rtabmap\").\n"
@@ -72,6 +72,7 @@ void showUsage()
             "  --exposure_comp    Do exposure compensation between left and right images.\n"
             "  --disp             Generate full disparity.\n"
             "  --raw              Use raw images (not rectified, this only works with okvis, msckf or vins odometry).\n"
+            "  --save_db          Save the mapping database created.\n"
             "%s\n"
             "Example:\n\n"
             "   $ rtabmap-mbari \\\n"
@@ -105,6 +106,7 @@ int main(int argc, char * argv[])
     bool exposureCompensation = false;
     bool quiet = false;
     int imuFilter = 1;
+    bool saveDB = false;
 
     bool useImu = false;
     bool useFilterOdometry = false;
@@ -128,6 +130,10 @@ int main(int argc, char * argv[])
             else if(std::strcmp(argv[i], "--calib_prefix") == 0)
             {
                 calibPrefix = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--save_db") == 0)
+            {
+                saveDB = true;
             }
             else if(std::strcmp(argv[i], "--quiet") == 0)
             {
@@ -318,7 +324,7 @@ int main(int argc, char * argv[])
         mapUpdate = 1;
     }
 
-    std::string databasePath = output + outputName + ".db";
+    std::string databasePath = saveDB ? output + outputName + ".db" : "";
     UFile::erase(databasePath);
     if(cameraThread.camera()->init(output, calibPrefix + "_calib"))
     {
@@ -561,10 +567,6 @@ int main(int argc, char * argv[])
                 double slamTime = timer.ticks();
 
                 float rmse = -1;
-                if(rtabmap.getStatistics().data().find(Statistics::kGtTranslational_rmse()) != rtabmap.getStatistics().data().end())
-                {
-                    rmse = rtabmap.getStatistics().data().at(Statistics::kGtTranslational_rmse());
-                }
 
                 if(data.keypoints().size() == 0 && data.laserScanRaw().size())
                 {
