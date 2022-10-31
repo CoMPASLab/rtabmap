@@ -151,7 +151,7 @@ int main(int argc, char * argv[])
             {
                 exposureCompensation = true;
             }
-            else if(std::strcmp(argv[i], "--odometry_data_file") == 0)
+            else if(std::strcmp(argv[i], "--odom_data_file") == 0)
             {
                 filterOdometryFileName = argv[++i];
             }
@@ -291,6 +291,13 @@ int main(int argc, char * argv[])
                      data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
 
+    // Forward-Right-Down to Forward-Left-Up
+    Transform FRDToFLU = { 1, 0, 0, 0,
+                           0,-1, 0, 0,
+                           0, 0,-1, 0 };
+
+    baseToImu = FRDToFLU * baseToImu;
+
     // We use CameraThread only to use postUpdate() method
 
     CameraThread cameraThread(new
@@ -299,7 +306,7 @@ int main(int argc, char * argv[])
                 pathRightImages,
                 !raw,
                 0.0f,
-                baseToCam0 * CameraModel::opticalRotation().inverse()), parameters);
+                FRDToFLU * baseToCam0 * CameraModel::opticalRotation().inverse()), parameters);
     std::cout << "baseToImu:\n" << baseToImu << std::endl;
     std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
     std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
@@ -485,6 +492,7 @@ int main(int argc, char * argv[])
                     if (t_loc - start > 1) {
                         newFilterOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
                             odom[5], odom[6] };
+                        newFilterOdometry = FRDToFLU * newFilterOdometry;
                     }
                 } while (t_loc <= data.stamp());
             }
@@ -494,6 +502,7 @@ int main(int argc, char * argv[])
 
             OdometryInfo odomInfo;
             UDEBUG("");
+
             Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
             lastFilterOdometry = newFilterOdometry;
             UDEBUG("");
