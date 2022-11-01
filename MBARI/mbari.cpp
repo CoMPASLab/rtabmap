@@ -296,17 +296,19 @@ int main(int argc, char * argv[])
                            0,-1, 0, 0,
                            0, 0,-1, 0 };
 
+    // Maybe have the data be in the correct convention already
     baseToImu = FRDToFLU * baseToImu;
 
     // We use CameraThread only to use postUpdate() method
 
+    // Note: The optical rotation is applied within
     CameraThread cameraThread(new
         CameraStereoImages(
                 pathLeftImages,
                 pathRightImages,
                 !raw,
                 0.0f,
-                FRDToFLU * baseToCam0 * CameraModel::opticalRotation().inverse()), parameters);
+                baseToCam0), parameters);
     std::cout << "baseToImu:\n" << baseToImu << std::endl;
     std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
     std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
@@ -492,7 +494,6 @@ int main(int argc, char * argv[])
                     if (t_loc - start > 1) {
                         newFilterOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
                             odom[5], odom[6] };
-                        newFilterOdometry = FRDToFLU * newFilterOdometry;
                     }
                 } while (t_loc <= data.stamp());
             }
