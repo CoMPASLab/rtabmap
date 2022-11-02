@@ -291,14 +291,6 @@ int main(int argc, char * argv[])
                      data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
     }
 
-    // Forward-Right-Down to Forward-Left-Up
-    Transform FRDToFLU = { 1, 0, 0, 0,
-                           0,-1, 0, 0,
-                           0, 0,-1, 0 };
-
-    // Maybe have the data be in the correct convention already
-    baseToImu = FRDToFLU * baseToImu;
-
     // We use CameraThread only to use postUpdate() method
 
     // Note: The optical rotation is applied within
