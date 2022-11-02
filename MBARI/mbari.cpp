@@ -59,9 +59,10 @@ void showUsage()
 {
     printf("\nUsage:\n"
             "rtabmap-mbari [options] path\n"
-            "  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038\")\n"
+            "  path               Root folder of the sequence (e.g., \"~/mbari-datasets/SE/simulation_0038/\")\n"
             "  left_image_dir     Left image directory (e.g., \"color/PROSILICA_L\")\n"
             "  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
+            "  calib_file_dir     Path to calibration file folder (e.g., \"~/calibrations/PROSILICA_2020/\")\n"
             "  --odom_data_file   (Optional) Data file to be used as odometry guesses, must be in forward-left-up frame (e.g., \"odom.csv\")\n"
             "  --imu_data_file    (Optional) IMU data file (e.g., \"imu.csv\")\n"
             "  --imu_calib_file   (Optional) IMU calib YAML (e.g., \"imu_calib.yaml\")\n"
@@ -98,6 +99,7 @@ int main(int argc, char * argv[])
     std::string seq;
     std::string leftImageDirName;
     std::string rightImageDirName;
+    std::string calibFileDirPath;
     std::string imuDataFileName = "";
     std::string imuCalibFileName = "";
     std::string filterOdometryFileName = "";
@@ -179,6 +181,7 @@ int main(int argc, char * argv[])
         }
         leftImageDirName = argv[2];
         rightImageDirName = argv[3];
+        calibFileDirPath = argv[4];
         if (!filterOdometryFileName.empty())
         {
             useFilterOdometry = true;
@@ -206,13 +209,14 @@ int main(int argc, char * argv[])
     std::string pathRightImages = path + rightImageDirName;
     std::string pathFilterOdometryData = path + filterOdometryFileName;
     std::string pathImuData = path + imuDataFileName;
-    std::string pathImuCalib = path + imuCalibFileName;
+    std::string pathImuCalib = calibFileDirPath + imuCalibFileName;
 
     printf("Paths:\n"
             "   Sequence number:  %s\n"
             "   Sequence path:    %s\n"
             "   Output:           %s\n"
             "   Output name:      %s\n"
+            "   Calib directory:  %s\n"
             "   Calib prefix:     %s\n"
             "   left images:      %s\n"
             "   right images:     %s\n",
@@ -220,6 +224,7 @@ int main(int argc, char * argv[])
             path.c_str(),
             output.c_str(),
             outputName.c_str(),
+            calibFileDirPath.c_str(),
             calibPrefix.c_str(),
             pathLeftImages.c_str(),
             pathRightImages.c_str());
@@ -248,7 +253,7 @@ int main(int argc, char * argv[])
     }
     printf("RTAB-Map version: %s\n", RTABMAP_VERSION);
 
-    YAML::Node left_calib = YAML::LoadFile(path + calibPrefix + "_calib_left.yaml");
+    YAML::Node left_calib = YAML::LoadFile(calibFileDirPath + calibPrefix + "_calib_left.yaml");
     if(left_calib.IsNull())
     {
         UERROR("Cannot open calibration file \"%s\"", (path + calibPrefix + "_calib_left.yaml").c_str());
@@ -327,7 +332,7 @@ int main(int argc, char * argv[])
 
     std::string databasePath = saveDB ? output + outputName + ".db" : "";
     UFile::erase(databasePath);
-    if(cameraThread.camera()->init(output, calibPrefix + "_calib"))
+    if(cameraThread.camera()->init(calibFileDirPath, calibPrefix + "_calib"))
     {
         int totalImages = (int)((CameraStereoImages*)cameraThread.camera())->filenames().size();
 
