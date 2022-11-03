@@ -9,5 +9,9 @@ app/android/.project
 app/android/AndroidManifest.xml
 app/android/res/raw/
 compile_flags.txt
+compile_commands.json
 tags
 *.swp
+__pycache__/
+.clangd
+.cache/
