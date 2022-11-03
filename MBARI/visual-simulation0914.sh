@@ -1,3 +1,3 @@
 #!/bin/bash
 
-../build/bin/rtabmap-mbari-3d-mapping ~/mbari-datasets/SE/simulation_0914/ color/PROSILICA_L/ color/PROSILICA_R/ --imu_data_file imu.csv --imu_calib_file imu_calib.yaml --ImuFilter/ComplementaryDoBiasEstimation false
+../build/bin/rtabmap-mbari-3d-mapping ~/mbari-ws/src/auto_analysis_scripts/datasets/SE/simulation_0914/ color/PROSILICA_L/ color/PROSILICA_R/ ~/mbari-ws/src/auto_analysis_scripts/calibrations/STONEFISH_0914/ --imu_data_file imu.csv --imu_calib_file imu_calib.yaml --ImuFilter/ComplementaryDoBiasEstimation false 
