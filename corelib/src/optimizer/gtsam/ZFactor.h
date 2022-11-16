@@ -43,7 +43,7 @@ public:
   gtsam::Vector evaluateError(const gtsam::Pose3& p, boost::optional<gtsam::Matrix&> H = boost::none) const {
     if(H)
     {
-	  p.translation(H);
+      p.translation(H);
     }
     return (gtsam::Vector3() << std::numeric_limits<double>::min(), std::numeric_limits<double>::min(), p.z() - mz_).finished();
   }
