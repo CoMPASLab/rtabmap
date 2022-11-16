@@ -64,6 +64,7 @@ void showUsage()
             "  right_image_dir    Right image directory (e.g., \"color/PROSILICA_R\")\n"
             "  calib_file_dir     Path to calibration file folder (e.g., \"~/calibrations/PROSILICA_2020/\")\n"
             "  --odom_data_file   (Optional) Data file to be used as odometry guesses, must be in forward-left-up frame (e.g., \"odom.csv\")\n"
+            "  --depth_data_file  (Optional) Data file with absolute depth info (values should be negative as per FLU) (e.g., \"depth_data.csv\")\n"
             "  --imu_data_file    (Optional) IMU data file (e.g., \"imu.csv\")\n"
             "  --imu_calib_file   (Optional) IMU calib YAML (e.g., \"imu_calib.yaml\")\n"
             "  --output           Output directory. By default, results are saved in \"path\".\n"
@@ -103,6 +104,7 @@ int main(int argc, char * argv[])
     std::string imuDataFileName = "";
     std::string imuCalibFileName = "";
     std::string filterOdometryFileName = "";
+    std::string depthDataFileName = "";
     bool disp = false;
     bool raw = true;
     bool exposureCompensation = false;
@@ -112,6 +114,7 @@ int main(int argc, char * argv[])
 
     bool useImu = false;
     bool useFilterOdometry = false;
+    bool useAbsoluteDepths = false;
 
     if(argc < 2)
     {
@@ -157,6 +160,10 @@ int main(int argc, char * argv[])
             {
                 filterOdometryFileName = argv[++i];
             }
+            else if(std::strcmp(argv[i], "--depth_data_file") == 0)
+            {
+                depthDataFileName = argv[++i];
+            }
             else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
             {
                 imuCalibFileName = argv[++i];
@@ -196,6 +203,11 @@ int main(int argc, char * argv[])
         {
             printf("Not using IMU nor odometry as necessary params were not provided\n");
         }
+        if (!depthDataFileName.empty())
+        {
+            useAbsoluteDepths = true;
+            printf("Using depth data for absolute constraints\n");
+        }
         parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
         parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
         if(raw)
@@ -210,6 +222,7 @@ int main(int argc, char * argv[])
     std::string pathFilterOdometryData = path + filterOdometryFileName;
     std::string pathImuData = path + imuDataFileName;
     std::string pathImuCalib = calibFileDirPath + imuCalibFileName;
+    std::string pathDepthData = path + depthDataFileName;
 
     printf("Paths:\n"
             "   Sequence number:  %s\n"
@@ -237,6 +250,10 @@ int main(int argc, char * argv[])
     if(useFilterOdometry)
     {
         printf("   Odometry data:    %s\n", pathFilterOdometryData.c_str());
+    }
+    if(useAbsoluteDepths)
+    {
+        printf("   Depth data:    %s\n", pathDepthData.c_str());
     }
 
     printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
@@ -342,55 +359,73 @@ int main(int argc, char * argv[])
         odomParameters.erase(Parameters::kRtabmapPublishRAMUsage()); // as odometry is in the same process than rtabmap, don't get RAM usage in odometry.
         Odometry * odom = Odometry::create(odomParameters);
 
-        std::ifstream imu_file;
+        std::ifstream imuDataFile;
 
         if (useImu)
         {
             // open the IMU file
             std::string line;
-            imu_file.open(pathImuData.c_str());
-            if (!imu_file.good()) {
+            imuDataFile.open(pathImuData.c_str());
+            if (!imuDataFile.good()) {
                 UERROR("no imu file found at %s",pathImuData.c_str());
                 return -1;
             }
             int number_of_lines = 0;
-            while (std::getline(imu_file, line))
+            while (std::getline(imuDataFile, line))
                 ++number_of_lines;
             printf("No. IMU measurements: %d\n", number_of_lines-1);
             if (number_of_lines - 1 <= 0) {
                 UERROR("no imu messages present in %s", pathImuData.c_str());
                 return -1;
             }
-            // set reading position to second line
-            imu_file.clear();
-            imu_file.seekg(0, std::ios::beg);
-            std::getline(imu_file, line);
+            imuDataFile.clear();
+            imuDataFile.seekg(0, std::ios::beg);
 
             cameraThread.enableIMUFiltering(imuFilter, parameters);
         }
 
-        std::ifstream filter_odometry_file;
+        std::ifstream filterOdometryFile;
 
         if (useFilterOdometry)
         {
             std::string line;
-            filter_odometry_file.open(pathFilterOdometryData.c_str());
-            if (!filter_odometry_file.good()) {
+            filterOdometryFile.open(pathFilterOdometryData.c_str());
+            if (!filterOdometryFile.good()) {
                 UERROR("no odom file found at %s",pathFilterOdometryData.c_str());
                 return -1;
             }
             int number_of_lines = 0;
-            while (std::getline(filter_odometry_file, line))
+            while (std::getline(filterOdometryFile, line))
                 ++number_of_lines;
             printf("No. odom measurements: %d\n", number_of_lines-1);
             if (number_of_lines - 1 <= 0) {
                 UERROR("no odom messages present in %s", pathFilterOdometryData.c_str());
                 return -1;
             }
-            // set reading position to second line
-            filter_odometry_file.clear();
-            filter_odometry_file.seekg(0, std::ios::beg);
-            std::getline(filter_odometry_file, line);
+            filterOdometryFile.clear();
+            filterOdometryFile.seekg(0, std::ios::beg);
+        }
+
+        std::ifstream depthDataFile;
+
+        if (useAbsoluteDepths)
+        {
+            std::string line;
+            depthDataFile.open(pathDepthData.c_str());
+            if (!depthDataFile.good()) {
+                UERROR("no depth file found at %s",pathDepthData.c_str());
+                return -1;
+            }
+            int number_of_lines = 0;
+            while (std::getline(depthDataFile, line))
+                ++number_of_lines;
+            printf("No. depth measurements: %d\n", number_of_lines-1);
+            if (number_of_lines - 1 <= 0) {
+                UERROR("no depth messages present in %s", pathDepthData.c_str());
+                return -1;
+            }
+            depthDataFile.clear();
+            depthDataFile.seekg(0, std::ios::beg);
         }
 
         Rtabmap rtabmap;
@@ -420,11 +455,15 @@ int main(int argc, char * argv[])
 
         Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
 
+        float firstAbsoluteDepth = 0.f;
+        bool firstAbsoluteDepthSet = false;
+
         while(data.isValid())
         {
             UDEBUG("");
 
             Transform newFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
+            float newAbsoluteDepth = 0.f;
 
             if (useImu)
             {
@@ -432,7 +471,7 @@ int main(int argc, char * argv[])
                 double t_imu = start;
                 do {
                     std::string line;
-                    if (!std::getline(imu_file, line)) {
+                    if (!std::getline(imuDataFile, line)) {
                         UINFO("\nFinished parsing IMU.");
                         break;
                     }
@@ -469,7 +508,7 @@ int main(int argc, char * argv[])
                 double t_loc = start;
                 do {
                     std::string line;
-                    if (!std::getline(filter_odometry_file, line)) {
+                    if (!std::getline(filterOdometryFile, line)) {
                         UINFO("\nFinished parsing localization data.\n");
                         break;
                     }
@@ -493,6 +532,31 @@ int main(int argc, char * argv[])
                             odom[5], odom[6] };
                     }
                 } while (t_loc <= data.stamp());
+            }
+            if (useAbsoluteDepths)
+            {
+                double t_dep = start;
+                do {
+                    std::string line;
+                    if (!std::getline(depthDataFile, line)) {
+                        UINFO("\nFinished parsing depth data.\n");
+                        printf("\nFinished parsing depth data.\n");
+                        break;
+                    }
+
+                    std::stringstream stream(line);
+                    std::string s;
+                    std::getline(stream, s, ',');
+                    std::string nanoseconds = s.substr(s.size() - 9, 9);
+                    std::string seconds = s.substr(0, s.size() - 9);
+
+                    double z;
+                    std::getline(stream, s, ',');
+                    z = uStr2Double(s);
+
+                    t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+                    newAbsoluteDepth = z - firstAbsoluteDepth;
+                } while (t_dep <= data.stamp());
             }
 
             cameraThread.postUpdate(&data, &cameraInfo);
@@ -551,8 +615,19 @@ int main(int argc, char * argv[])
                 externalStats.insert(std::make_pair("Odometry/LocalMapSize/", odomInfo.localMapSize));
                 externalStats.insert(std::make_pair("Odometry/LocalScanMapSize/", odomInfo.localScanMapSize));
 
-                OdometryEvent e(SensorData(), Transform(), odomInfo);
+                OdometryEvent e(SensorData(), Transform(), odomInfo); 
+
+                if (useAbsoluteDepths) {
+                    if (!firstAbsoluteDepthSet) {
+                        firstAbsoluteDepth = newAbsoluteDepth;
+                        newAbsoluteDepth = 0.f;
+                        firstAbsoluteDepthSet = true;
+                    }
+                    data.setAbsoluteDepth(newAbsoluteDepth);
+                }
+
                 if (rtabmap.process(data, pose, covariance, e.velocity(), externalStats)) {
+
 #ifdef BUILD_WITH_3D_MAPPING
                     // Map processing
                     mapBuilder.processStatistics(rtabmap.getStatistics());

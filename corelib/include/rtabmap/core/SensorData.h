@@ -310,6 +310,13 @@ public:
 
 	bool isPointVisibleFromCameras(const cv::Point3f & pt) const; // assuming point is in robot frame
 
+	void setAbsoluteDepth(const float & depth) {
+        absoluteDepth_ = depth;
+        hasAbsoluteDepth_ = true;
+    };
+    // If only I had std::optional...
+	const float * absoluteDepth() {return hasAbsoluteDepth_ ? &absoluteDepth_ : nullptr;};
+
 private:
 	int _id;
 	double _stamp;
@@ -361,6 +368,10 @@ private:
 	GPS gps_;
 
 	IMU imu_;
+
+    // If only I had std::optional...
+    float absoluteDepth_ = 0.f;
+    bool hasAbsoluteDepth_ = false;
 };
 
 }

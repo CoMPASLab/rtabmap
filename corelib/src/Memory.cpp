@@ -5847,6 +5847,11 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
 	}
 
 	// prior
+
+    if(data.absoluteDepth()) {
+		s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, *data.absoluteDepth(), 0.f, 0.f, 0.f}));
+		UDEBUG("Added absolute depth: %f", data.absoluteDepth());
+    }
 	if(!data.globalPose().isNull() && data.globalPoseCovariance().cols==6 && data.globalPoseCovariance().rows==6 && data.globalPoseCovariance().cols==CV_64FC1)
 	{
 		s->addLink(Link(s->id(), s->id(), Link::kPosePrior, data.globalPose(), data.globalPoseCovariance().inv()));

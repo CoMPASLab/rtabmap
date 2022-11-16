@@ -1138,14 +1138,13 @@ bool Rtabmap::process(
 	covariance.at<double>(5,5) = odomAngularVariance;
 	return process(data, odomPose, covariance, odomVelocity, externalStats);
 }
-bool Rtabmap::process(
-		const SensorData & data,
-		Transform odomPose,
-		const cv::Mat & odomCovariance,
-		const std::vector<float> & odomVelocity,
-		const std::map<std::string, float> & externalStats)
+bool Rtabmap::process(const SensorData& data,
+                      Transform odomPose,
+                      const cv::Mat& odomCovariance,
+                      const std::vector<float>& odomVelocity,
+                      const std::map<std::string, float>& externalStats)
 {
-	UDEBUG("");
+    UDEBUG("");
 
 	//============================================================
 	// Initialization
@@ -4736,6 +4735,7 @@ void Rtabmap::optimizeCurrentMap(
 		int * iterationsDone) const
 {
 	//Optimize the map
+    printf("optimize map\n");
 	UINFO("Optimize map: around location %d (lookInDatabase=%s)", id, lookInDatabase?"true":"false");
 	if(_memory && id > 0)
 	{
