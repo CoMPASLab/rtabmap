@@ -574,14 +574,6 @@ int main(int argc, char * argv[])
                     newAbsoluteDepth = z - firstAbsoluteDepth;
                 } while (t_dep <= data.stamp());
 
-                newAbsoluteDepth += baseToDepth.z();
-
-                if (!firstAbsoluteDepthSet) {
-                    firstAbsoluteDepth = newAbsoluteDepth;
-                    newAbsoluteDepth = 0.f;
-                    firstAbsoluteDepthSet = true;
-                }
-                data.setAbsoluteDepth(newAbsoluteDepth);
             }
 
             cameraThread.postUpdate(&data, &cameraInfo);
@@ -593,6 +585,19 @@ int main(int argc, char * argv[])
             Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
             lastFilterOdometry = newFilterOdometry;
             UDEBUG("");
+
+            if (useAbsoluteDepths) {
+                float depthRotated = (pose.rotation() * baseToDepth).z();
+                UDEBUG("Depth rotated: %f", depthRotated);
+                newAbsoluteDepth += depthRotated;
+
+                if (!firstAbsoluteDepthSet) {
+                    firstAbsoluteDepth = newAbsoluteDepth;
+                    newAbsoluteDepth = 0.f;
+                    firstAbsoluteDepthSet = true;
+                }
+                data.setAbsoluteDepth(newAbsoluteDepth);
+            }
 
             if(odomInfo.keyFrameAdded)
             {
