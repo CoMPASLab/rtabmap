@@ -102,7 +102,7 @@ int main(int argc, char * argv[])
     std::string rightImageDirName;
     std::string calibFileDirPath;
     std::string imuDataFileName = "";
-    std::string imuCalibFileName = "";
+    std::string sensorCalibFileName = "";
     std::string filterOdometryFileName = "";
     std::string depthDataFileName = "";
     bool disp = false;
@@ -164,13 +164,13 @@ int main(int argc, char * argv[])
             {
                 depthDataFileName = argv[++i];
             }
-            else if(std::strcmp(argv[i], "--imu_calib_file") == 0)
-            {
-                imuCalibFileName = argv[++i];
-            }
             else if(std::strcmp(argv[i], "--imu_data_file") == 0)
             {
                 imuDataFileName = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--sensor_calib_file") == 0)
+            {
+                sensorCalibFileName = argv[++i];
             }
         }
         parameters = Parameters::parseArguments(argc, argv);
@@ -194,7 +194,7 @@ int main(int argc, char * argv[])
             useFilterOdometry = true;
             printf("Using filter odometry data for pose guesses\n");
         }
-        else if (!imuDataFileName.empty() && !imuCalibFileName.empty())
+        else if (!imuDataFileName.empty())
         {
             useImu = true;
             printf("Using IMU data for pose guesses\n");
@@ -221,7 +221,7 @@ int main(int argc, char * argv[])
     std::string pathRightImages = path + rightImageDirName;
     std::string pathFilterOdometryData = path + filterOdometryFileName;
     std::string pathImuData = path + imuDataFileName;
-    std::string pathImuCalib = calibFileDirPath + imuCalibFileName;
+    std::string pathSensorCalib = calibFileDirPath + sensorCalibFileName;
     std::string pathDepthData = path + depthDataFileName;
 
     printf("Paths:\n"
@@ -244,7 +244,6 @@ int main(int argc, char * argv[])
     if(useImu)
     {
         printf("   IMU data:         %s\n", pathImuData.c_str());
-        printf("   IMU calib:        %s\n", pathImuCalib.c_str());
         printf("   IMU filter:       %d\n", imuFilter);
     }
     if(useFilterOdometry)
@@ -253,7 +252,11 @@ int main(int argc, char * argv[])
     }
     if(useAbsoluteDepths)
     {
-        printf("   Depth data:    %s\n", pathDepthData.c_str());
+        printf("   Depth data:       %s\n", pathDepthData.c_str());
+    }
+    if(!sensorCalibFileName.empty())
+    {
+        printf("   Sensor calib:     %s\n", pathSensorCalib.c_str());
     }
 
     printf("   Exposure Compensation: %s\n", exposureCompensation?"true":"false");
@@ -294,23 +297,38 @@ int main(int argc, char * argv[])
     }
 
     Transform baseToImu = {cv::Mat::eye(3,4,CV_64FC1)};
+    Transform baseToDepth = {cv::Mat::eye(3,4,CV_64FC1)};
 
-    if (useImu) {
-        // Load IMU calibration
-        YAML::Node config = YAML::LoadFile(pathImuCalib);
+    if (!sensorCalibFileName.empty()) {
+        // Load sensor calibration file
+        YAML::Node config = YAML::LoadFile(pathSensorCalib);
         if(config.IsNull())
         {
-            UERROR("Cannot open IMU calibration file \"%s\"", pathImuCalib.c_str());
+            UERROR("Cannot open sensor calibration file \"%s\"", pathSensorCalib.c_str());
             return -1;
         }
+        if (config["T_IMU"]) 
+        {
+            YAML::Node T_BS = config["T_IMU"];
+            YAML::Node data = T_BS["data"];
+            UASSERT(data.size() == 16);
 
-        YAML::Node T_BS = config["T_IMU"];
-        YAML::Node data = T_BS["data"];
-        UASSERT(data.size() == 16);
+            baseToImu = {data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
+                         data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
+                         data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
+            std::cout << "baseToImu:\n" << baseToImu << std::endl;
+        }
+        if (config["T_DEPTH"]) 
+        {
+            YAML::Node T_BS = config["T_DEPTH"];
+            YAML::Node data = T_BS["data"];
+            UASSERT(data.size() == 16);
 
-        baseToImu = {data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
-                     data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
-                     data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
+            baseToDepth = {data[0].as<float>(), data[1].as<float>(), data[2].as<float>(), data[3].as<float>(),
+                           data[4].as<float>(), data[5].as<float>(), data[6].as<float>(), data[7].as<float>(),
+                           data[8].as<float>(), data[9].as<float>(), data[10].as<float>(), data[11].as<float>()};
+            std::cout << "baseToDepth:\n" << baseToDepth << std::endl;
+        }
     }
 
     // We use CameraThread only to use postUpdate() method
@@ -323,9 +341,7 @@ int main(int argc, char * argv[])
                 !raw,
                 0.0f,
                 baseToCam0), parameters);
-    std::cout << "baseToImu:\n" << baseToImu << std::endl;
     std::cout << "baseToCam0:\n" << baseToCam0 << std::endl;
-    std::cout << "imuToCam0:\n" << baseToImu.inverse()*baseToCam0 << std::endl;
     ((CameraStereoImages*)cameraThread.camera())->setTimestamps(false, path + "image_timestamps.txt", false);
     if(exposureCompensation)
     {
@@ -557,6 +573,15 @@ int main(int argc, char * argv[])
                     t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
                     newAbsoluteDepth = z - firstAbsoluteDepth;
                 } while (t_dep <= data.stamp());
+
+                newAbsoluteDepth += baseToDepth.z();
+
+                if (!firstAbsoluteDepthSet) {
+                    firstAbsoluteDepth = newAbsoluteDepth;
+                    newAbsoluteDepth = 0.f;
+                    firstAbsoluteDepthSet = true;
+                }
+                data.setAbsoluteDepth(newAbsoluteDepth);
             }
 
             cameraThread.postUpdate(&data, &cameraInfo);
@@ -616,15 +641,6 @@ int main(int argc, char * argv[])
                 externalStats.insert(std::make_pair("Odometry/LocalScanMapSize/", odomInfo.localScanMapSize));
 
                 OdometryEvent e(SensorData(), Transform(), odomInfo); 
-
-                if (useAbsoluteDepths) {
-                    if (!firstAbsoluteDepthSet) {
-                        firstAbsoluteDepth = newAbsoluteDepth;
-                        newAbsoluteDepth = 0.f;
-                        firstAbsoluteDepthSet = true;
-                    }
-                    data.setAbsoluteDepth(newAbsoluteDepth);
-                }
 
                 if (rtabmap.process(data, pose, covariance, e.velocity(), externalStats)) {
 
