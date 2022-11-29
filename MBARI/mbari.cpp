@@ -106,7 +106,7 @@ int main(int argc, char * argv[])
     std::string filterOdometryFileName = "";
     std::string depthDataFileName = "";
     bool disp = false;
-    bool raw = true;
+    bool raw = false;
     bool exposureCompensation = false;
     bool quiet = false;
     int imuFilter = 1;
