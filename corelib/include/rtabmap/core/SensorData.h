@@ -314,8 +314,8 @@ public:
         absoluteDepth_ = depth;
         hasAbsoluteDepth_ = true;
     };
-    // If only I had std::optional...
-    const float * absoluteDepth() {return hasAbsoluteDepth_ ? &absoluteDepth_ : nullptr;};
+    const float * absoluteDepth() const {return hasAbsoluteDepth_ ? &absoluteDepth_ : nullptr;};
+
 
 private:
     int _id;

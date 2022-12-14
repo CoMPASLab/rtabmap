@@ -2965,6 +2965,7 @@ bool Rtabmap::process(const SensorData& data,
     if(_rgbdSlamMode
         &&
         (_loopClosureHypothesis.first>0 ||
+         data.absoluteDepth() ||
          lastProximitySpaceClosureId>0 || // can be different map of the current one
          statistics_.reducedIds().size() ||
          (signature->hasLink(signature->id(), Link::kPosePrior) && !_graphOptimizer->priorsIgnored()) || // prior edge
@@ -3455,6 +3456,7 @@ bool Rtabmap::process(const SensorData& data,
         else
         {
             UINFO("Update map correction");
+            printf("Update map correction\n");
             std::map<int, Transform> poses = _optimizedPoses;
 
             // if _optimizeFromGraphEnd parameter just changed state, don't use optimized poses as guess
