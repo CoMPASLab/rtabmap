@@ -328,6 +328,21 @@ Transform OdometryF2M::computeTransform(
                 data.setFeatures(lastFrame_->sensorData().keypoints(), lastFrame_->sensorData().keypoints3D(), lastFrame_->sensorData().descriptors());
                 data.setLaserScan(lastFrame_->sensorData().laserScanRaw());
 
+                // IMPORTANT
+                if (guessIteration == 1 && transform.isNull() && !guess.isNull())
+                {
+                    printf("Can't get visual odometry, using guess directly\n");
+                    transform = this->getPose()*guess;
+                }
+                else if (!transform.isNull())
+                {
+                    printf("Visual odometry distance from guess: %f\n", transform.getDistance(this->getPose()*guess)); 
+                    if (transform.getDistance(this->getPose()*guess) > 999.f) 
+                    {
+                        transform = this->getPose()*guess;
+                    }
+                }
+
                 UDEBUG("Registration time = %fs", regInfo.totalTime);
                 if(!transform.isNull())
                 {
