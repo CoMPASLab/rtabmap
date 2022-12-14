@@ -172,6 +172,14 @@ int main(int argc, char * argv[])
             {
                 sensorCalibFileName = argv[++i];
             }
+            else if(std::strcmp(argv[i], "--info_prints") == 0)
+            {
+                ULogger::setLevel(ULogger::kInfo);
+            }
+            else if(std::strcmp(argv[i], "--debug_prints") == 0)
+            {
+                ULogger::setLevel(ULogger::kDebug);
+            }
         }
         parameters = Parameters::parseArguments(argc, argv);
         path = argv[1];
