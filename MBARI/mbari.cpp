@@ -479,9 +479,6 @@ int main(int argc, char * argv[])
 
         Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
 
-        float firstAbsoluteDepth = 0.f;
-        bool firstAbsoluteDepthSet = false;
-
         while(data.isValid())
         {
             UDEBUG("");
@@ -574,12 +571,9 @@ int main(int argc, char * argv[])
                     std::string nanoseconds = s.substr(s.size() - 9, 9);
                     std::string seconds = s.substr(0, s.size() - 9);
 
-                    double z;
                     std::getline(stream, s, ',');
-                    z = uStr2Double(s);
-
+                    newAbsoluteDepth = uStr2Double(s);
                     t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
-                    newAbsoluteDepth = z - firstAbsoluteDepth;
                 } while (t_dep <= data.stamp());
 
             }
@@ -598,12 +592,6 @@ int main(int argc, char * argv[])
                 float depthRotated = (pose.rotation() * baseToDepth).z();
                 UDEBUG("Depth rotated: %f", depthRotated);
                 newAbsoluteDepth += depthRotated;
-
-                if (!firstAbsoluteDepthSet) {
-                    firstAbsoluteDepth = newAbsoluteDepth;
-                    newAbsoluteDepth = 0.f;
-                    firstAbsoluteDepthSet = true;
-                }
                 data.setAbsoluteDepth(newAbsoluteDepth);
             }
 

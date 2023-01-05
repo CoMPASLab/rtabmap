@@ -369,7 +369,7 @@ private:
 
     IMU imu_;
 
-    // If only I had std::optional...
+    // Absolute depth params
     float absoluteDepth_ = 0.f;
     bool hasAbsoluteDepth_ = false;
 };

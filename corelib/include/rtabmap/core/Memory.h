@@ -373,6 +373,9 @@ private:
 	OccupancyGrid * _occupancy;
 
 	MarkerDetector * _markerDetector;
+
+    float firstAbsoluteDepth; 
+    bool firstAbsoluteDepthSet = false; 
 };
 
 } // namespace rtabmap
