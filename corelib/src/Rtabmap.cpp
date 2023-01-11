@@ -448,7 +448,7 @@ void Rtabmap::init(const std::string & configFile, const std::string & databaseP
     this->init(param, databasePath, loadDatabaseParameters);
 }
 
-void Rtabmap::close(bool databaseSaved, const std::string & ouputDatabasePath)
+void Rtabmap::close(bool databaseSaved, const std::string & outputDatabasePath)
 {
     UINFO("databaseSaved=%d", databaseSaved?1:0);
     _highestHypothesis = std::make_pair(0,0.0f);
@@ -506,7 +506,8 @@ void Rtabmap::close(bool databaseSaved, const std::string & ouputDatabasePath)
             }
             _memory->saveOptimizedPoses(_optimizedPoses, _lastLocalizationPose);
         }
-        _memory->close(databaseSaved, true, ouputDatabasePath);
+
+        _memory->close(databaseSaved, true, outputDatabasePath);
         delete _memory;
         _memory = 0;
     }
@@ -3456,7 +3457,6 @@ bool Rtabmap::process(const SensorData& data,
         else
         {
             UINFO("Update map correction");
-            printf("Update map correction\n");
             std::map<int, Transform> poses = _optimizedPoses;
 
             // if _optimizeFromGraphEnd parameter just changed state, don't use optimized poses as guess
@@ -4737,8 +4737,8 @@ void Rtabmap::optimizeCurrentMap(
         int * iterationsDone) const
 {
     //Optimize the map
-    printf("optimize map\n");
     UINFO("Optimize map: around location %d (lookInDatabase=%s)", id, lookInDatabase?"true":"false");
+    printf("Optimize map: around location %d (lookInDatabase=%s)\n", id, lookInDatabase?"true":"false");
     if(_memory && id > 0)
     {
         UTimer timer;
@@ -6707,5 +6707,32 @@ void Rtabmap::createGlobalScanMap()
         _globalScanMapPoses.clear();
     }
 }
+
+void Rtabmap::saveCurrentTrajectory(const std::string & outputTrajectoryPath)
+{
+    printf("Saving trajectory to \"%s\"\n", outputTrajectoryPath.c_str());
+    std::map<int, Transform> poses;
+    std::map<int, Transform> vo_poses;
+    std::multimap<int, Link> links;
+    std::map<int, Signature> signatures;
+    std::map<int, double> stamps;
+    getGraph(vo_poses, links, false, true);
+    links.clear();
+    getGraph(poses, links, true, true, &signatures);
+    printf("Total amount of poses: \"%ld\"\n", poses.size());
+    for(std::map<int, Signature>::iterator iter=signatures.begin(); iter!=signatures.end(); ++iter)
+    {
+        stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
+    }
+    if(poses.size() && graph::exportPoses(outputTrajectoryPath, 10, poses, links, stamps))
+    {
+        printf("Saving %s... done!\n", outputTrajectoryPath.c_str());
+    }
+    else
+    {
+        printf("Saving %s... failed!\n", outputTrajectoryPath.c_str());
+    }
+}
+
 
 } // namespace rtabmap

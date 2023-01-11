@@ -738,30 +738,10 @@ int main(int argc, char * argv[])
         /////////////////////////////
         // Processing dataset end
         /////////////////////////////
-
+           
         // Save trajectory
-        printf("Saving trajectory ...\n");
-        std::map<int, Transform> poses;
-        std::map<int, Transform> vo_poses;
-        std::multimap<int, Link> links;
-        std::map<int, Signature> signatures;
-        std::map<int, double> stamps;
-        rtabmap.getGraph(vo_poses, links, false, true);
-        links.clear();
-        rtabmap.getGraph(poses, links, true, true, &signatures);
-        for(std::map<int, Signature>::iterator iter=signatures.begin(); iter!=signatures.end(); ++iter)
-        {
-            stamps.insert(std::make_pair(iter->first, iter->second.getStamp()));
-        }
         std::string pathTrajectory = output + outputName + "-trajectory.txt";
-        if(poses.size() && graph::exportPoses(pathTrajectory, 10, poses, links, stamps))
-        {
-            printf("Saving %s... done!\n", pathTrajectory.c_str());
-        }
-        else
-        {
-            printf("Saving %s... failed!\n", pathTrajectory.c_str());
-        }
+        rtabmap.saveCurrentTrajectory(pathTrajectory);
     }
     else
     {

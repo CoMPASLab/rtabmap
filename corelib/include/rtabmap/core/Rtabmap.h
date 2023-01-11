@@ -121,7 +121,7 @@ public:
 	 *                     Db/Sqlite3InMemory=false (opened database is
 	 *                     then overwritten).
 	 */
-	void close(bool databaseSaved = true, const std::string & ouputDatabasePath = "");
+	void close(bool databaseSaved = true, const std::string & outputDatabasePath = "");
 
 	const std::string & getWorkingDir() const {return _wDir;}
 	bool isRGBDMode() const { return _rgbdSlamMode; }
@@ -241,6 +241,7 @@ public:
 	void adjustLikelihood(std::map<int, float> & likelihood) const;
 	std::pair<int, float> selectHypothesis(const std::map<int, float> & posterior,
 											const std::map<int, float> & likelihood) const;
+	void saveCurrentTrajectory(const std::string & outputTrajectoryPath = "");
 
 private:
 	void optimizeCurrentMap(int id,
