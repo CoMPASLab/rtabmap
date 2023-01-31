@@ -328,7 +328,7 @@ Transform OdometryF2M::computeTransform(
                 data.setFeatures(lastFrame_->sensorData().keypoints(), lastFrame_->sensorData().keypoints3D(), lastFrame_->sensorData().descriptors());
                 data.setLaserScan(lastFrame_->sensorData().laserScanRaw());
 
-                // IMPORTANT
+                // Hack to use guess directly (so odometry and thus map are not reset)
                 if (guessIteration == 1 && transform.isNull() && !guess.isNull())
                 {
                     printf("Can't get visual odometry, using guess directly\n");
@@ -337,8 +337,10 @@ Transform OdometryF2M::computeTransform(
                 else if (!transform.isNull())
                 {
                     printf("Visual odometry distance from guess: %f\n", transform.getDistance(this->getPose()*guess)); 
-                    if (transform.getDistance(this->getPose()*guess) > 999.f) 
+                    double maxDistance = 3.0;
+                    if (transform.getDistance(this->getPose()*guess) > maxDistance) 
                     {
+                        printf("Distance is over %f, using guess directly\n", maxDistance); 
                         transform = this->getPose()*guess;
                     }
                 }
