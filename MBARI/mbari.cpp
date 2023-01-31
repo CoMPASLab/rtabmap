@@ -75,14 +75,9 @@ void showUsage()
             "  --disp             Generate full disparity.\n"
             "  --raw              Use raw images (not rectified, this only works with okvis, msckf or vins odometry).\n"
             "  --save_db          Save the mapping database created.\n"
-            "%s\n"
-            "Example:\n\n"
-            "   $ rtabmap-mbari \\\n"
-            "       --Rtabmap/PublishRAMUsage true\\\n"
-            "       --Rtabmap/DetectionRate 2\\\n"
-            "       --RGBD/LinearUpdate 0\\\n"
-            "       --Mem/STMSize 30\\\n"
-            "       ~/mbari-datasets/SE/simulation_0038\n\n", rtabmap::Parameters::showUsage());
+            "  --camera_transform_offset Provide camera transform offset quaternion for debugging purposes.\n"
+            "  --sensor_time_offset Provide sensor time offset for debugging purposes.\n"
+            "%s\n", rtabmap::Parameters::showUsage());
     exit(1);
 }
 
@@ -115,6 +110,9 @@ int main(int argc, char * argv[])
     bool useImu = false;
     bool useFilterOdometry = false;
     bool useAbsoluteDepths = false;
+
+    Transform cameraTransformOffset;
+    float sensorTimeOffset = 0.0f;
 
     if(argc < 2)
     {
@@ -179,6 +177,19 @@ int main(int argc, char * argv[])
             else if(std::strcmp(argv[i], "--debug_prints") == 0)
             {
                 ULogger::setLevel(ULogger::kDebug);
+            }
+            else if(std::strcmp(argv[i], "--camera_transform_offset") == 0) {
+                float x = atof(argv[i + 1]);
+                float y = atof(argv[i + 2]);
+                float z = atof(argv[i + 3]);
+                float qx = atof(argv[i + 4]);
+                float qy = atof(argv[i + 5]);
+                float qz = atof(argv[i + 6]);
+                float qw = atof(argv[i + 7]);
+                cameraTransformOffset = { x, y, z, qx, qy, qz, qw };
+            }
+            else if(std::strcmp(argv[i], "--sensor_time_offset") == 0) {
+                sensorTimeOffset = atof(argv[++i]);
             }
         }
         parameters = Parameters::parseArguments(argc, argv);
@@ -295,6 +306,12 @@ int main(int argc, char * argv[])
     Transform baseToCam0(local[0].as<float>(), local[1].as<float>(), local[2].as<float>(), local[3].as<float>(),
                          local[4].as<float>(), local[5].as<float>(), local[6].as<float>(), local[7].as<float>(),
                          local[8].as<float>(), local[9].as<float>(), local[10].as<float>(), local[11].as<float>());
+
+    if (!cameraTransformOffset.isNull())
+    {
+        std::cout << "cameraTransformOffset:\n" << cameraTransformOffset << std::endl;
+        baseToCam0 = baseToCam0 * cameraTransformOffset;
+    }
 
     int odomStrategy = Parameters::defaultOdomStrategy();
     Parameters::parse(parameters, Parameters::kOdomStrategy(), odomStrategy);
@@ -515,7 +532,7 @@ int main(int argc, char * argv[])
                         acc[j] = uStr2Double(s);
                     }
 
-                    t_imu = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+                    t_imu = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
 
                     if (t_imu - start + 1 > 0) {
                         SensorData dataImu(IMU(gyr, cv::Mat(3,3,CV_64FC1), acc, cv::Mat(3,3,CV_64FC1), baseToImu), 0, t_imu);
@@ -546,7 +563,7 @@ int main(int argc, char * argv[])
                         odom[j] = uStr2Double(s);
                     }
 
-                    t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+                    t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
 
                     if (t_loc - start > 1) {
                         newFilterOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
@@ -573,9 +590,8 @@ int main(int argc, char * argv[])
 
                     std::getline(stream, s, ',');
                     newAbsoluteDepth = uStr2Double(s);
-                    t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9;
+                    t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
                 } while (t_dep <= data.stamp());
-
             }
 
             cameraThread.postUpdate(&data, &cameraInfo);
