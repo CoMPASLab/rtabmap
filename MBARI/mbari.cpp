@@ -544,7 +544,12 @@ int main(int argc, char * argv[])
             if (useFilterOdometry) 
             {
                 double t_loc = start;
+                double t_prev;
+                Transform newestOdometry = lastFilterOdometry;
+                Transform previousOdometry;
                 do {
+                    previousOdometry = newestOdometry;
+                    t_prev = t_loc;
                     std::string line;
                     if (!std::getline(filterOdometryFile, line)) {
                         UINFO("\nFinished parsing localization data.\n");
@@ -566,10 +571,17 @@ int main(int argc, char * argv[])
                     t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
 
                     if (t_loc - start > 1) {
-                        newFilterOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
-                            odom[5], odom[6] };
+                        newestOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
+                             odom[5], odom[6] };
                     }
                 } while (t_loc <= data.stamp());
+
+                // Interpolate odometry
+                if (!newestOdometry.isNull())
+                {
+                    float scalar = (data.stamp() - t_prev) / (t_loc - t_prev); 
+                    newFilterOdometry = previousOdometry.interpolate(scalar, newestOdometry);
+                }
             }
             if (useAbsoluteDepths)
             {
