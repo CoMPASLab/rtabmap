@@ -1,31 +1,3 @@
-/*
-Copyright (c) 2010-2016, Mathieu Labbe - IntRoLab - Universite de Sherbrooke
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of the Universite de Sherbrooke nor the
-
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #include "rtabmap/core/Odometry.h"
 #include "rtabmap/core/Rtabmap.h"
 #include "rtabmap/core/CameraStereo.h"
@@ -112,7 +84,7 @@ int main(int argc, char * argv[])
     bool useAbsoluteDepths = false;
 
     Transform cameraTransformOffset;
-    float sensorTimeOffset = 0.0f;
+    double sensorTimeOffset = 0.0;
 
     if(argc < 2)
     {
@@ -495,6 +467,8 @@ int main(int argc, char * argv[])
         int odomKeyFrames = 0;
 
         Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
+        double lastTimestamp = -1.0;
+        double lastAbsoluteDepth = 0.0;
 
         while(data.isValid())
         {
@@ -543,18 +517,18 @@ int main(int argc, char * argv[])
             }
             if (useFilterOdometry) 
             {
-                double t_loc = start;
-                double t_prev;
+                double t_loc = lastTimestamp;
+                double t_prev = lastTimestamp;
                 Transform newestOdometry = lastFilterOdometry;
-                Transform previousOdometry;
+                Transform previousOdometry = lastFilterOdometry;
                 do {
-                    previousOdometry = newestOdometry;
-                    t_prev = t_loc;
                     std::string line;
                     if (!std::getline(filterOdometryFile, line)) {
                         UINFO("\nFinished parsing localization data.\n");
                         break;
                     }
+                    previousOdometry = newestOdometry;
+                    t_prev = t_loc;
 
                     std::stringstream stream(line);
                     std::string s;
@@ -570,14 +544,13 @@ int main(int argc, char * argv[])
 
                     t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
 
-                    if (t_loc - start > 1) {
-                        newestOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
-                             odom[5], odom[6] };
-                    }
+                    newestOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
+                         odom[5], odom[6] };
+
                 } while (t_loc <= data.stamp());
 
                 // Interpolate odometry
-                if (!newestOdometry.isNull())
+                if (t_prev != -1.0)
                 {
                     float scalar = (data.stamp() - t_prev) / (t_loc - t_prev); 
                     newFilterOdometry = previousOdometry.interpolate(scalar, newestOdometry);
@@ -585,7 +558,10 @@ int main(int argc, char * argv[])
             }
             if (useAbsoluteDepths)
             {
-                double t_dep = start;
+                double t_dep = lastTimestamp;
+                double t_prev = lastTimestamp;
+                float newestDepth = lastAbsoluteDepth;
+                float previousDepth = lastAbsoluteDepth;
                 do {
                     std::string line;
                     if (!std::getline(depthDataFile, line)) {
@@ -593,6 +569,8 @@ int main(int argc, char * argv[])
                         printf("\nFinished parsing depth data.\n");
                         break;
                     }
+                    previousDepth = newestDepth;
+                    t_prev = t_dep;
 
                     std::stringstream stream(line);
                     std::string s;
@@ -601,9 +579,16 @@ int main(int argc, char * argv[])
                     std::string seconds = s.substr(0, s.size() - 9);
 
                     std::getline(stream, s, ',');
-                    newAbsoluteDepth = uStr2Double(s);
+                    newestDepth = uStr2Double(s);
                     t_dep = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
                 } while (t_dep <= data.stamp());
+
+                // Interpolate depth
+                if (t_prev != -1.0)
+                {
+                    float scalar = (data.stamp() - t_prev) / (t_dep - t_prev); 
+                    newAbsoluteDepth = previousDepth + (newestDepth - previousDepth) * scalar;
+                }
             }
 
             cameraThread.postUpdate(&data, &cameraInfo);
@@ -614,13 +599,14 @@ int main(int argc, char * argv[])
 
             Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
             lastFilterOdometry = newFilterOdometry;
+            lastTimestamp = data.stamp();
             UDEBUG("");
 
             if (useAbsoluteDepths) {
+                lastAbsoluteDepth = newAbsoluteDepth;
                 float depthRotated = (pose.rotation() * baseToDepth).z();
                 UDEBUG("Depth rotated: %f", depthRotated);
-                newAbsoluteDepth += depthRotated;
-                data.setAbsoluteDepth(newAbsoluteDepth);
+                data.setAbsoluteDepth(newAbsoluteDepth + depthRotated);
             }
 
             if(odomInfo.keyFrameAdded)
