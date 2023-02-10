@@ -550,7 +550,7 @@ int main(int argc, char * argv[])
                 } while (t_loc <= data.stamp());
 
                 // Interpolate odometry
-                if (t_prev != -1.0)
+                if (t_prev != -1.0 && t_loc - start > 1)
                 {
                     float scalar = (data.stamp() - t_prev) / (t_loc - t_prev); 
                     newFilterOdometry = previousOdometry.interpolate(scalar, newestOdometry);
