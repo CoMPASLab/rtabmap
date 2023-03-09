@@ -15,3 +15,5 @@ tags
 __pycache__/
 .clangd
 .cache/
+build/
+backup/
