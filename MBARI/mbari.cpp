@@ -86,6 +86,10 @@ int main(int argc, char * argv[])
     Transform cameraTransformOffset;
     double sensorTimeOffset = 0.0;
 
+#ifdef BUILD_WITH_3D_MAPPING
+    int pointCloudDecimation = 4;
+#endif
+
     if(argc < 2)
     {
         showUsage();
@@ -163,6 +167,11 @@ int main(int argc, char * argv[])
             else if(std::strcmp(argv[i], "--sensor_time_offset") == 0) {
                 sensorTimeOffset = atof(argv[++i]);
             }
+#ifdef BUILD_WITH_3D_MAPPING
+            else if(std::strcmp(argv[i], "--point_cloud_decimation") == 0) {
+                pointCloudDecimation = atof(argv[++i]);
+            }
+#endif
         }
         parameters = Parameters::parseArguments(argc, argv);
         path = argv[1];
@@ -456,7 +465,7 @@ int main(int argc, char * argv[])
 #ifdef BUILD_WITH_3D_MAPPING
         printf("Starting 3D mapping\n");
         QApplication app(argc, argv);
-        MapBuilder mapBuilder;
+        MapBuilder mapBuilder(pointCloudDecimation);
         mapBuilder.show();
         QApplication::processEvents();
 #endif

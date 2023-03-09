@@ -53,9 +53,10 @@ class MapBuilder : public QWidget
 	Q_OBJECT
 public:
 	//Camera ownership is not transferred!
-	MapBuilder() :
+	MapBuilder(int decimation = 4) :
 		odometryCorrection_(Transform::getIdentity()),
-		paused_(false)
+		paused_(false),
+        decimation_(decimation)
 	{
 		this->setWindowFlags(Qt::Dialog);
 		this->setWindowTitle(tr("3D Map"));
@@ -113,7 +114,7 @@ public:
 			{
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = util3d::cloudRGBFromSensorData(
 					data,
-					4,     // decimation
+					decimation_,
 					0.0f); // max depth
 				if(cloud->size())
 				{
@@ -175,7 +176,7 @@ public:
 					// Add the new cloud
 					pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = util3d::cloudRGBFromSensorData(
 							s.sensorData(),
-							12,     // decimation
+							decimation_,
 							4.0f); // max depth
 					if(cloud->size())
 					{
@@ -235,6 +236,7 @@ protected:
 	Transform lastOdomPose_;
 	Transform odometryCorrection_;
 	bool paused_;
+    int decimation_;
 };
 
 
