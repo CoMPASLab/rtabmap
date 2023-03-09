@@ -936,7 +936,8 @@ void Memory::addSignatureToStm(Signature * signature, const cv::Mat & covariance
     // add signature on top of the short-term memory
     if(signature)
     {
-        UDEBUG("adding %d (pose=%s)", signature->id(), signature->getPose().prettyPrint().c_str());
+        // UDEBUG("adding %d (pose=%s)", signature->id(), signature->getPose().prettyPrint().c_str());
+        printf("adding %d (pose=%s)\n", signature->id(), signature->getPose().prettyPrint().c_str());
         // Update neighbors
         if(_stMem.size())
         {

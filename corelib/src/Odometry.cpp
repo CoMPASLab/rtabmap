@@ -576,14 +576,12 @@ Transform Odometry::process(SensorData & data, const Transform & guessIn, Odomet
 	Transform imuCurrentTransform;
 	if(!guessIn.isNull())
 	{
-        std::cout << "Original guess:" << std::endl;
         float x, y, z, roll, pitch, yaw;
         guess.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
-        printf("X: %f, Y: %f, Z: %f, R: %f, P: %f Y: %f\n", x, y, z, roll, pitch, yaw);
+        printf("Original guess: X: %f, Y: %f, Z: %f, R: %f, P: %f Y: %f\n", x, y, z, roll, pitch, yaw);
 		guess = guessIn;
-        std::cout << "Guess from odometry:" << std::endl;
         guess.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
-        printf("X: %f, Y: %f, Z: %f, R: %f, P: %f Y: %f\n\n", x, y, z, roll, pitch, yaw);
+        printf("New guess: X: %f, Y: %f, Z: %f, R: %f, P: %f Y: %f\n\n", x, y, z, roll, pitch, yaw);
 	}
 	else if(!imus_.empty())
 	{
