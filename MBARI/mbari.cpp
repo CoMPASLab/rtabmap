@@ -763,7 +763,7 @@ int main(int argc, char * argv[])
         /////////////////////////////
            
         // Save trajectory
-        std::string pathTrajectory = output + outputName + "-trajectory.txt";
+        std::string pathTrajectory = output + outputName + "-trajectory.csv";
         rtabmap.saveCurrentTrajectory(pathTrajectory);
     }
     else
