@@ -374,8 +374,8 @@ private:
 
 	MarkerDetector * _markerDetector;
 
-    float firstAbsoluteDepth; 
-    bool firstAbsoluteDepthSet = false; 
+    float firstAbsoluteDepth_;
+    bool firstAbsoluteDepthSet_ = false;
 };
 
 } // namespace rtabmap

@@ -14,6 +14,7 @@
 #include "rtabmap/utilite/UStl.h"
 #include "rtabmap/utilite/UProcessInfo.h"
 #include "rtabmap/core/IMUFilter.h"
+#include "rtabmap/core/Depth.h"
 #include <pcl/common/common.h>
 #include <yaml-cpp/yaml.h>
 #include <stdio.h>
@@ -613,9 +614,7 @@ int main(int argc, char * argv[])
 
             if (useAbsoluteDepths) {
                 lastAbsoluteDepth = newAbsoluteDepth;
-                float depthRotated = (pose.rotation() * baseToDepth).z();
-                UDEBUG("Depth rotated: %f", depthRotated);
-                data.setAbsoluteDepth(newAbsoluteDepth + depthRotated);
+                data.setAbsoluteDepth({newAbsoluteDepth, baseToDepth});
             }
 
             if(odomInfo.keyFrameAdded)

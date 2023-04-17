@@ -41,6 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/EnvSensor.h>
 #include <rtabmap/core/Landmark.h>
 #include <rtabmap/core/GlobalDescriptor.h>
+#include <rtabmap/core/Depth.h>
 
 namespace rtabmap
 {
@@ -168,7 +169,8 @@ public:
             _userDataCompressed.empty() &&
             _keypoints.size() == 0 &&
             _descriptors.empty() &&
-            imu_.empty());
+            imu_.empty() &&
+            absoluteDepth_.empty());
     }
 
     int id() const {return _id;}
@@ -310,11 +312,11 @@ public:
 
     bool isPointVisibleFromCameras(const cv::Point3f & pt) const; // assuming point is in robot frame
 
-    void setAbsoluteDepth(const float & depth) {
-        absoluteDepth_ = depth;
-        hasAbsoluteDepth_ = true;
+    void setAbsoluteDepth(const Depth &absoluteDepth) {
+        absoluteDepth_ = absoluteDepth;
     };
-    const float * absoluteDepth() const {return hasAbsoluteDepth_ ? &absoluteDepth_ : nullptr;};
+    // Depth measured in relation to absolute reference point
+    const Depth & absoluteDepth() const {return absoluteDepth_;};
 
 
 private:
@@ -369,9 +371,7 @@ private:
 
     IMU imu_;
 
-    // Absolute depth params
-    float absoluteDepth_ = 0.f;
-    bool hasAbsoluteDepth_ = false;
+    Depth absoluteDepth_;
 };
 
 }

@@ -5849,17 +5849,17 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
 
     // prior
 
-    if(data.absoluteDepth()) {
-        if (!firstAbsoluteDepthSet) 
+    if(!data.absoluteDepth().empty()) {
+        float currentDepth = data.absoluteDepth().depthInBaseLink(pose.rotation());
+        printf("Absolute depth in base link: %f (original measurement %f)\n", currentDepth,
+                data.absoluteDepth().originalDepthMeasurement());
+        if (!firstAbsoluteDepthSet_)
         {
-            firstAbsoluteDepth = *data.absoluteDepth(); 
-            UINFO("Got first absolute depth: %f", firstAbsoluteDepth);
-            printf("Got first absolute depth: %f\n", firstAbsoluteDepth);
-            firstAbsoluteDepthSet = true;
+            firstAbsoluteDepth_ = currentDepth;
+            printf("Got first absolute depth: %f\n", firstAbsoluteDepth_);
+            firstAbsoluteDepthSet_ = true;
         }
-        s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, *data.absoluteDepth() - firstAbsoluteDepth, 0.f, 0.f, 0.f}));
-        UINFO("Added absolute depth: %f", *data.absoluteDepth());
-        printf("Added absolute depth: %f\n", *data.absoluteDepth());
+        s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth - firstAbsoluteDepth_, 0.f, 0.f, 0.f}));
     }
     if(!data.globalPose().isNull() && data.globalPoseCovariance().cols==6 && data.globalPoseCovariance().rows==6 && data.globalPoseCovariance().cols==CV_64FC1)
     {

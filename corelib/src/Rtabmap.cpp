@@ -2966,7 +2966,7 @@ bool Rtabmap::process(const SensorData& data,
     if(_rgbdSlamMode
         &&
         (_loopClosureHypothesis.first>0 ||
-         data.absoluteDepth() ||
+         !data.absoluteDepth().empty() || // Always optimize if absolute depth is sent
          lastProximitySpaceClosureId>0 || // can be different map of the current one
          statistics_.reducedIds().size() ||
          (signature->hasLink(signature->id(), Link::kPosePrior) && !_graphOptimizer->priorsIgnored()) || // prior edge
