@@ -1257,7 +1257,7 @@ void Parameters::writeINI(const std::string & configFile, const ParametersMap & 
 	{
 		std::string key = iter->first;
 		key = uReplaceChar(key, '/', '\\'); // Ini files use \ by default for separators, so replace the /
-		
+
 		std::string value = iter->second.c_str();
 		value = uReplaceChar(value, '\\', '/'); // use always slash for values
 

@@ -133,6 +133,7 @@ Odometry::Odometry(const rtabmap::ParametersMap & parameters) :
 		_kalmanMeasurementNoise(Parameters::defaultOdomKalmanMeasurementNoise()),
 		_imageDecimation(Parameters::defaultOdomImageDecimation()),
 		_alignWithGround(Parameters::defaultOdomAlignWithGround()),
+        _useImuRotationDirect(Parameters::defaultOdomUseImuRotationDirect()),
 		_publishRAMUsage(Parameters::defaultRtabmapPublishRAMUsage()),
 		_imagesAlreadyRectified(Parameters::defaultRtabmapImagesAlreadyRectified()),
 		_pose(Transform::getIdentity()),
@@ -162,6 +163,7 @@ Odometry::Odometry(const rtabmap::ParametersMap & parameters) :
 	Parameters::parse(parameters, Parameters::kOdomKalmanMeasurementNoise(), _kalmanMeasurementNoise);
 	Parameters::parse(parameters, Parameters::kOdomImageDecimation(), _imageDecimation);
 	Parameters::parse(parameters, Parameters::kOdomAlignWithGround(), _alignWithGround);
+    Parameters::parse(parameters, Parameters::kOdomUseImuRotationDirect(), _useImuRotationDirect);
 	Parameters::parse(parameters, Parameters::kRtabmapPublishRAMUsage(), _publishRAMUsage);
 	Parameters::parse(parameters, Parameters::kRtabmapImagesAlreadyRectified(), _imagesAlreadyRectified);
 
@@ -888,9 +890,29 @@ Transform Odometry::process(SensorData & data, const Transform & guessIn, Odomet
 		}
 		++framesProcessed_;
 
-		imuLastTransform_ = imuCurrentTransform;
+        if (_useImuRotationDirect && !imuCurrentTransform.isNull() && !imuLastTransform_.isNull())
+        {
+            // Replace orientation with direct IMU data
+            float x, y, z, roll, pitch, yaw;
 
-		return _pose *= t; // update
+            Transform orientation = imuLastTransform_.inverse() * imuCurrentTransform;
+            orientation.getEulerAngles(roll, pitch, yaw);
+
+            Transform newTranslation = _pose * t;
+            newTranslation.getTranslation(x, y, z);
+
+            Transform pose(x, y, z, roll, pitch, yaw);
+            _pose = pose;
+
+            imuLastTransform_ = imuCurrentTransform;
+
+            return _pose ;
+        }
+        else
+        {
+            imuLastTransform_ = imuCurrentTransform;
+            return _pose *= t; // update
+        }
 	}
 	else if(_resetCurrentCount > 0)
 	{
