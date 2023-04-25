@@ -21,7 +21,7 @@ class Depth
 public:
     Depth() {}
     Depth(const float & depth,
-        const Transform & baseLinkToDepthSensor = Transform::getIdentity()) :
+            const Transform & baseLinkToDepthSensor = Transform::getIdentity()) :
         originalDepthMeasurement_(depth),
         baseLinkToDepthSensor_(baseLinkToDepthSensor)
     {

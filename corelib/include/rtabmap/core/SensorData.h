@@ -28,6 +28,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef SENSORDATA_H_
 #define SENSORDATA_H_
 
+#include "rtabmap/core/ArbitraryPoseConstraint.h"
+#include <opencv2/core/types.hpp>
 #include <rtabmap/core/RtabmapExp.h>
 #include <rtabmap/core/Transform.h>
 #include <rtabmap/core/CameraModel.h>
@@ -318,6 +320,12 @@ public:
     // Depth measured in relation to absolute reference point
     const Depth & absoluteDepth() const {return absoluteDepth_;};
 
+    void addArbitraryPoseConstraint(const ArbitraryPoseConstraint &arbitraryPoseConstraint) {
+        arbitraryPoseConstraints_.push_back(arbitraryPoseConstraint);
+    };
+    // Pose constraint passed directly to optimization graph
+    const std::vector<ArbitraryPoseConstraint>& arbitraryPoseConstraints() const {return arbitraryPoseConstraints_;};
+
 
 private:
     int _id;
@@ -372,6 +380,8 @@ private:
     IMU imu_;
 
     Depth absoluteDepth_;
+
+    std::vector<ArbitraryPoseConstraint> arbitraryPoseConstraints_;
 };
 
 }

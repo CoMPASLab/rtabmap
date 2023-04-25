@@ -5861,6 +5861,19 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
         }
         s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth - firstAbsoluteDepth_, 0.f, 0.f, 0.f}));
     }
+    if(!data.arbitraryPoseConstraints().empty() && _signatures.size() && _signatures.rbegin()->second->mapId() == _idMapCount)
+    {
+        int previousId = _signatures.rbegin()->second->id();
+        for (const auto & constraint : data.arbitraryPoseConstraints())
+        {
+            s->addLink(Link(s->id(), previousId, Link::kArbitraryFromTo,
+                            constraint.pose(),
+                            constraint.covariance().inv()));
+            float x, y, z, roll, pitch, yaw;
+            constraint.pose().getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
+            printf("Added arbitrary constraint between poses %d and %d: %f %f %f %f %f %f\n", previousId, s->id(), x, y, z, roll, pitch, yaw);
+        }
+    }
     if(!data.globalPose().isNull() && data.globalPoseCovariance().cols==6 && data.globalPoseCovariance().rows==6 && data.globalPoseCovariance().cols==CV_64FC1)
     {
         s->addLink(Link(s->id(), s->id(), Link::kPosePrior, data.globalPose(), data.globalPoseCovariance().inv()));
