@@ -108,6 +108,7 @@ private:
 	float _kalmanMeasurementNoise;
 	unsigned int _imageDecimation;
 	bool _alignWithGround;
+    bool _useImuRotationDirect;
 	bool _publishRAMUsage;
 	bool _imagesAlreadyRectified;
 	Transform _pose;
