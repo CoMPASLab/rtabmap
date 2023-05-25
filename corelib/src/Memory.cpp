@@ -5850,16 +5850,27 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
     // prior
 
     if(!data.absoluteDepth().empty()) {
-        float currentDepth = data.absoluteDepth().depthInBaseLink(pose.rotation());
-        printf("Absolute depth in base link: %f (original measurement %f)\n", currentDepth,
-                data.absoluteDepth().originalDepthMeasurement());
+        // Set value for first depth measurement
         if (!firstAbsoluteDepthSet_)
         {
-            firstAbsoluteDepth_ = currentDepth;
-            printf("Got first absolute depth: %f\n", firstAbsoluteDepth_);
+            if (!std::isnan(data.absoluteDepth().originalDepthMeasurement())){
+                // Create transform with first depth measurement
+                // This is already handled by the depth_filter node, but this is a backup
+                Transform initial_depth_transform(0.0, 0.0, data.absoluteDepth().originalDepthMeasurement(), 0.0, 0.0, 0.0, 1.0);
+                firstAbsoluteDepth_ = initial_depth_transform.inverse();
             firstAbsoluteDepthSet_ = true;
+                printf("Got first absolute depth: %f\n", firstAbsoluteDepth_.z());
         }
-        s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth - firstAbsoluteDepth_, 0.f, 0.f, 0.f}));
+        }
+
+        // Compute depth with respect to the origin of the trajectory
+        if (firstAbsoluteDepthSet_)
+        {
+            float currentDepth = data.absoluteDepth().depthInBaseLink(firstAbsoluteDepth_);
+            printf("Relative depth: %f (original measurement %f)\n", currentDepth, data.absoluteDepth().originalDepthMeasurement());
+            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}));
+        }
+
     }
     if(!data.arbitraryPoseConstraints().empty() && _signatures.size() && _signatures.rbegin()->second->mapId() == _idMapCount)
     {

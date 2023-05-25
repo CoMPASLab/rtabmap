@@ -28,12 +28,15 @@ public:
     }
 
     const float & originalDepthMeasurement() const {return originalDepthMeasurement_;}
-    float depthInBaseLink(const Transform & currentBaseLinkRotation = Transform::getIdentity()) const {
+    float depthInBaseLink(const Transform & originalOffsetTransform = Transform::getIdentity()) const {
+        // The measurement is already in base_link
         // Offset depth by difference between original and rotated base_link_to_depth transforms
-        const float depthDiff = baseLinkToDepthSensor_.z() - (currentBaseLinkRotation * baseLinkToDepthSensor_).z(); 
+        // const float depthDiff = baseLinkToDepthSensor_.z() - (currentBaseLinkRotation * baseLinkToDepthSensor_).z(); 
+        
+        // Transform matrix with original depth measurement
         Transform depthTransform = Transform::getIdentity();
         depthTransform.z() = originalDepthMeasurement_;
-        return (baseLinkToDepthSensor_ * depthTransform).z() - depthDiff;
+        return (originalOffsetTransform * depthTransform).z();
     }
     const Transform & localTransform() const {return baseLinkToDepthSensor_;}
 
