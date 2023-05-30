@@ -21,13 +21,16 @@ class Depth
 public:
     Depth() {}
     Depth(const float & depth,
+          double* covariance,
             const Transform & baseLinkToDepthSensor = Transform::getIdentity()) :
         originalDepthMeasurement_(depth),
+        covariance_(covariance),
         baseLinkToDepthSensor_(baseLinkToDepthSensor)
     {
     }
 
     const float & originalDepthMeasurement() const {return originalDepthMeasurement_;}
+    double* getCovariance() const {return covariance_;}
     float depthInBaseLink(const Transform & originalOffsetTransform = Transform::getIdentity()) const {
         // The measurement is already in base_link
         // Offset depth by difference between original and rotated base_link_to_depth transforms
@@ -47,6 +50,7 @@ public:
 
 private:
     float originalDepthMeasurement_;
+    double* covariance_;
 
     // Transform from base link to depth sensor
     Transform baseLinkToDepthSensor_;
