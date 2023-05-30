@@ -5870,9 +5870,8 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
         {
             float currentDepth = data.absoluteDepth().depthInBaseLink(firstAbsoluteDepth_);
             // Compute information matrix
-            cv::Mat covariance_matrix(6, 6, CV_64FC1, data.absoluteDepth().getCovariance());
-            std::cout<<data.absoluteDepth().getCovariance()<<std::endl;
-            std::cout<<covariance_matrix<<std::endl;
+            cv::Mat covariance_matrix = data.absoluteDepth().getCovariance();
+            // Add unary factor
             printf("Relative depth: %f (original measurement %f)\n", currentDepth, data.absoluteDepth().originalDepthMeasurement());
             s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}, covariance_matrix.inv()));
         }
