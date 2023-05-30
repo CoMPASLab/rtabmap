@@ -63,6 +63,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/OccupancyGrid.h>
 #include <rtabmap/core/MarkerDetector.h>
 #include <opencv2/imgproc/types_c.h>
+#include <opencv2/core/hal/interface.h>
+#include <opencv2/opencv.hpp>
 
 namespace rtabmap {
 
@@ -5867,8 +5869,11 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
         if (firstAbsoluteDepthSet_)
         {
             float currentDepth = data.absoluteDepth().depthInBaseLink(firstAbsoluteDepth_);
+            // Compute information matrix
+            cv::Mat covariance_matrix = data.absoluteDepth().getCovariance();
+            // Add unary factor
             printf("Relative depth: %f (original measurement %f)\n", currentDepth, data.absoluteDepth().originalDepthMeasurement());
-            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}));
+            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}, covariance_matrix.inv()));
         }
 
     }
