@@ -5887,7 +5887,7 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
                             constraint.covariance().inv()));
             float x, y, z, roll, pitch, yaw;
             constraint.pose().getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
-            printf("Added arbitrary constraint between poses %d and %d: %f %f %f %f %f %f\n", previousId, s->id(), x, y, z, roll, pitch, yaw);
+            printf("Added arbitrary constraint between poses %d and %d: xyz=(%f %f %f), rpy=(%f %f %f)\n", previousId, s->id(), x, y, z, roll, pitch, yaw);
         }
     }
     if(!data.globalPose().isNull() && data.globalPoseCovariance().cols==6 && data.globalPoseCovariance().rows==6 && data.globalPoseCovariance().cols==CV_64FC1)
