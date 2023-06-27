@@ -143,6 +143,7 @@ Rtabmap::Rtabmap() :
     _createGlobalScanMap(Parameters::defaultRGBDProximityGlobalScanMap()),
     _markerPriorsLinearVariance(Parameters::defaultMarkerPriorsVarianceLinear()),
     _markerPriorsAngularVariance(Parameters::defaultMarkerPriorsVarianceAngular()),
+    _optimizationInterval(Parameters::defaultOptimizerInterval()),
     _loopClosureHypothesis(0,0.0f),
     _highestHypothesis(0,0.0f),
     _lastProcessTime(0.0),
@@ -473,6 +474,8 @@ void Rtabmap::close(bool databaseSaved, const std::string & outputDatabasePath)
     _globalScanMap.clear();
     _globalScanMapPoses.clear();
 
+    _optimizationIntervalCountdown = _optimizationInterval;
+
     flushStatisticLogs();
     if(_foutFloat)
     {
@@ -644,6 +647,8 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
             }
         }
     }
+
+    Parameters::parse(parameters, Parameters::kOptimizerInterval(), _optimizationInterval);
 
     UASSERT(_rgbdLinearUpdate >= 0.0f);
     UASSERT(_rgbdAngularUpdate >= 0.0f);
@@ -1054,6 +1059,7 @@ void Rtabmap::resetMemory()
     _optimizeFromGraphEndChanged = false;
     _globalScanMap.clear();
     _globalScanMapPoses.clear();
+    _optimizationIntervalCountdown = _optimizationInterval;
     this->clearPath(0);
 
     if(_memory)
@@ -2966,7 +2972,7 @@ bool Rtabmap::process(const SensorData& data,
     if(_rgbdSlamMode
         &&
         (_loopClosureHypothesis.first>0 ||
-         !data.absoluteDepth().empty() || // Always optimize if absolute depth is sent
+         ((!data.absoluteDepth().empty()) && _optimizationIntervalCountdown == 0) || // Optimize if arbitrary constraints are sent
          lastProximitySpaceClosureId>0 || // can be different map of the current one
          statistics_.reducedIds().size() ||
          (signature->hasLink(signature->id(), Link::kPosePrior) && !_graphOptimizer->priorsIgnored()) || // prior edge
@@ -2981,6 +2987,8 @@ bool Rtabmap::process(const SensorData& data,
           !landmarksDetected.empty()))
     {
         UASSERT(uContains(_optimizedPoses, signature->id()));
+
+        _optimizationIntervalCountdown = _optimizationInterval;
 
         //used in localization mode: filter virtual links
         std::multimap<int, Link> localizationLinks = graph::filterLinks(signature->getLinks(), Link::kVirtualClosure);
@@ -3613,6 +3621,10 @@ bool Rtabmap::process(const SensorData& data,
                 UERROR("Map correction should be identity when optimizing from the last node. T=%s", _mapCorrection.prettyPrint().c_str());
             }
         }
+    }
+    else
+    {
+        _optimizationIntervalCountdown = _optimizationIntervalCountdown == 0 ? 0 : _optimizationIntervalCountdown - 1;
     }
     int newLocId = _loopClosureHypothesis.first>0?_loopClosureHypothesis.first:lastProximitySpaceClosureId>0?lastProximitySpaceClosureId:0;
     _lastLocalizationNodeId = newLocId!=0?newLocId:_lastLocalizationNodeId;

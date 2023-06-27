@@ -389,6 +389,8 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(RGBD, ProximityMergedScanCovFactor, double, 100.0, uFormat("Covariance factor for one-to-many proximity detection (when %s>0 and scans are used).", kRGBDProximityPathMaxNeighbors().c_str()));
 
     // Graph optimization
+    RTABMAP_PARAM(Optimizer, Interval,        int, 0,          "Graph optimization interval if absolute depths and/or arbitrary pose constraints are provided");
+
 #ifdef RTABMAP_GTSAM
     RTABMAP_PARAM(Optimizer, Strategy,        int, 2,          "Graph optimization strategy: 0=TORO, 1=g2o, 2=GTSAM and 3=Ceres.");
     RTABMAP_PARAM(Optimizer, Iterations,      int, 20,         "Optimization iterations.");

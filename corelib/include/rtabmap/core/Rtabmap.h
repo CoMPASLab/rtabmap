@@ -327,6 +327,8 @@ private:
 	bool _createGlobalScanMap;
 	float _markerPriorsLinearVariance;
 	float _markerPriorsAngularVariance;
+	int _optimizationInterval;
+	int _optimizationIntervalCountdown;
 
 	std::pair<int, float> _loopClosureHypothesis;
 	std::pair<int, float> _highestHypothesis;
