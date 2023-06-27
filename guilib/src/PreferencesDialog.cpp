@@ -1089,6 +1089,7 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 	_ui->spinBox_maxLocalLocationsRetrieved->setObjectName(Parameters::kRGBDMaxLocalRetrieved().c_str());
 	_ui->rgbd_loopCovLimited->setObjectName(Parameters::kRGBDLoopCovLimited().c_str());
 
+	_ui->graphOptimization_interval->setObjectName(Parameters::kOptimizerInterval().c_str());
 	_ui->graphOptimization_type->setObjectName(Parameters::kOptimizerStrategy().c_str());
 	_ui->graphOptimization_iterations->setObjectName(Parameters::kOptimizerIterations().c_str());
 	_ui->graphOptimization_covarianceIgnored->setObjectName(Parameters::kOptimizerVarianceIgnored().c_str());
