@@ -46,6 +46,7 @@ public:
 		kUserClosure,
 		kVirtualClosure,
 		kNeighborMerged,
+		kArbitraryFromTo, // Arbitrary transform between any two poses
 		kPosePrior, // Absolute pose in /world frame, From == To
 		kPoseZPrior, // Absolute Z component only
 		kLandmark,  // Transform /base_link -­­> /landmark, "From" is node observing the landmark "To" (landmark is negative id)

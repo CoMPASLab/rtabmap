@@ -374,7 +374,7 @@ private:
 
 	MarkerDetector * _markerDetector;
 
-    float firstAbsoluteDepth_;
+    Transform firstAbsoluteDepth_;
     bool firstAbsoluteDepthSet_ = false;
 };
 

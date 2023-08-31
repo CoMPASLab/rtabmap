@@ -72,6 +72,7 @@ int main(int argc, char * argv[])
     std::string imuDataFileName = "";
     std::string sensorCalibFileName = "";
     std::string filterOdometryFileName = "";
+    std::string arbitraryPoseConstraintFileName = "";
     std::string depthDataFileName = "";
     bool disp = false;
     bool raw = false;
@@ -83,6 +84,7 @@ int main(int argc, char * argv[])
     bool useImu = false;
     bool useFilterOdometry = false;
     bool useAbsoluteDepths = false;
+    bool useArbitraryPoseConstraints = false;
 
     Transform cameraTransformOffset;
     double sensorTimeOffset = 0.0;
@@ -134,6 +136,10 @@ int main(int argc, char * argv[])
             else if(std::strcmp(argv[i], "--odom_data_file") == 0)
             {
                 filterOdometryFileName = argv[++i];
+            }
+            else if(std::strcmp(argv[i], "--arbitrary_pose_constraint_file") == 0)
+            {
+                arbitraryPoseConstraintFileName = argv[++i];
             }
             else if(std::strcmp(argv[i], "--depth_data_file") == 0)
             {
@@ -209,6 +215,11 @@ int main(int argc, char * argv[])
             useAbsoluteDepths = true;
             printf("Using depth data for absolute constraints\n");
         }
+        if (!arbitraryPoseConstraintFileName.empty())
+        {
+            useArbitraryPoseConstraints = true;
+            printf("Using arbitrary pose constraints\n");
+        }
         parameters.insert(ParametersPair(Parameters::kRtabmapWorkingDirectory(), output));
         parameters.insert(ParametersPair(Parameters::kRtabmapPublishRAMUsage(), "true"));
         if(raw)
@@ -224,6 +235,7 @@ int main(int argc, char * argv[])
     std::string pathImuData = path + imuDataFileName;
     std::string pathSensorCalib = calibFileDirPath + sensorCalibFileName;
     std::string pathDepthData = path + depthDataFileName;
+    std::string pathArbitraryPoseConstraintData = path + arbitraryPoseConstraintFileName;
 
     printf("Paths:\n"
             "   Sequence number:  %s\n"
@@ -451,6 +463,28 @@ int main(int argc, char * argv[])
             depthDataFile.seekg(0, std::ios::beg);
         }
 
+        std::ifstream arbitraryPoseConstraintFile;
+
+        if (useArbitraryPoseConstraints)
+        {
+            std::string line;
+            arbitraryPoseConstraintFile.open(pathArbitraryPoseConstraintData.c_str());
+            if (!arbitraryPoseConstraintFile.good()) {
+                UERROR("no pose constraint file found at %s", pathArbitraryPoseConstraintData.c_str());
+                return -1;
+            }
+            int number_of_lines = 0;
+            while (std::getline(arbitraryPoseConstraintFile, line))
+                ++number_of_lines;
+            printf("No. pose constraints: %d\n", number_of_lines-1);
+            if (number_of_lines - 1 <= 0) {
+                UERROR("no pose constraints present in %s", pathArbitraryPoseConstraintData.c_str());
+                return -1;
+            }
+            arbitraryPoseConstraintFile.clear();
+            arbitraryPoseConstraintFile.seekg(0, std::ios::beg);
+        }
+
         Rtabmap rtabmap;
         rtabmap.init(parameters, databasePath);
 
@@ -477,6 +511,7 @@ int main(int argc, char * argv[])
         int odomKeyFrames = 0;
 
         Transform lastFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
+        Transform lastPoseConstraint = {cv::Mat::eye(3,4,CV_64FC1)};
         double lastTimestamp = -1.0;
         double lastAbsoluteDepth = 0.0;
 
@@ -485,6 +520,7 @@ int main(int argc, char * argv[])
             UDEBUG("");
 
             Transform newFilterOdometry = {cv::Mat::eye(3,4,CV_64FC1)};
+            Transform newPoseConstraint = {cv::Mat::eye(3,4,CV_64FC1)};
             float newAbsoluteDepth = 0.f;
 
             if (useImu)
@@ -525,8 +561,7 @@ int main(int argc, char * argv[])
                     }
                 } while (t_imu <= data.stamp());
             }
-            if (useFilterOdometry) 
-            {
+            if (useFilterOdometry) {
                 double t_loc = lastTimestamp;
                 double t_prev = lastTimestamp;
                 Transform newestOdometry = lastFilterOdometry;
@@ -600,6 +635,46 @@ int main(int argc, char * argv[])
                     newAbsoluteDepth = previousDepth + (newestDepth - previousDepth) * scalar;
                 }
             }
+            if (useArbitraryPoseConstraints) {
+                double t_loc = lastTimestamp;
+                double t_prev = lastTimestamp;
+                Transform newestOdometry = lastPoseConstraint;
+                Transform previousOdometry = lastPoseConstraint;
+                do {
+                    std::string line;
+                    if (!std::getline(arbitraryPoseConstraintFile, line)) {
+                        UINFO("\nFinished parsing pose constraint data.\n");
+                        break;
+                    }
+                    previousOdometry = newestOdometry;
+                    t_prev = t_loc;
+
+                    std::stringstream stream(line);
+                    std::string s;
+                    std::getline(stream, s, ',');
+                    std::string nanoseconds = s.substr(s.size() - 9, 9);
+                    std::string seconds = s.substr(0, s.size() - 9);
+
+                    float odom[7];
+                    for (int j = 0; j < 7; ++j) {
+                        std::getline(stream, s, ',');
+                        odom[j] = uStr2Double(s);
+                    }
+
+                    t_loc = double(uStr2Int(seconds)) + double(uStr2Int(nanoseconds))*1e-9 + sensorTimeOffset;
+
+                    newestOdometry = { odom[0], odom[1], odom[2], odom[3], odom[4], 
+                         odom[5], odom[6] };
+
+                } while (t_loc <= data.stamp());
+
+                // Interpolate odometry
+                if (t_prev != -1.0 && t_loc - start > 1)
+                {
+                    float scalar = (data.stamp() - t_prev) / (t_loc - t_prev); 
+                    newPoseConstraint = previousOdometry.interpolate(scalar, newestOdometry);
+                }
+            }
 
             cameraThread.postUpdate(&data, &cameraInfo);
             cameraInfo.timeTotal = timer.ticks();
@@ -607,7 +682,7 @@ int main(int argc, char * argv[])
             OdometryInfo odomInfo;
             UDEBUG("");
 
-            Transform pose = useFilterOdometry ? odom->process(data, (lastFilterOdometry.inverse() * newFilterOdometry), &odomInfo) : odom->process(data, &odomInfo);   
+            Transform pose = useFilterOdometry ? odom->process(data, lastFilterOdometry.inverse() * newFilterOdometry, &odomInfo) : odom->process(data, &odomInfo);   
             lastFilterOdometry = newFilterOdometry;
             lastTimestamp = data.stamp();
             UDEBUG("");
@@ -615,6 +690,13 @@ int main(int argc, char * argv[])
             if (useAbsoluteDepths) {
                 lastAbsoluteDepth = newAbsoluteDepth;
                 data.setAbsoluteDepth({newAbsoluteDepth, baseToDepth});
+            }
+
+            if (useArbitraryPoseConstraints && data.id() > 1) {
+                Transform diff = lastPoseConstraint.inverse() * newPoseConstraint;
+                auto diag = cv::Mat(cv::Mat::diag(cv::Mat{1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2}).inv());
+                data.addArbitraryPoseConstraint({diff, diag});
+                lastPoseConstraint = newPoseConstraint;
             }
 
             if(odomInfo.keyFrameAdded)
