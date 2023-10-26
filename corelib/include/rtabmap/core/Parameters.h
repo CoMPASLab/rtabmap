@@ -193,9 +193,10 @@ class RTABMAP_EXP Parameters
     RTABMAP_PARAM(Rtabmap, RectifyOnlyFeatures,          bool, false,  uFormat("If \"%s\" is false and this parameter is true, the whole RGB image will not be rectified, only the features. Warning: As projection of RGB-D image to point cloud is assuming that images are rectified, the generated point cloud map will have wrong colors if this parameter is true.", kRtabmapImagesAlreadyRectified().c_str()));
 
     // Hypotheses selection
-    RTABMAP_PARAM(Rtabmap, LoopThr,           float, 0.11,      "Loop closing threshold.");
-    RTABMAP_PARAM(Rtabmap, LoopRatio,         float, 0,         "The loop closure hypothesis must be over LoopRatio x lastHypothesisValue.");
-    RTABMAP_PARAM(Rtabmap, LoopGPS,           bool,  true,      uFormat("Use GPS to filter likelihood (if GPS is recorded). Only locations inside the local radius \"%s\" of the current GPS location are considered for loop closure detection.", kRGBDLocalRadius().c_str()));
+    RTABMAP_PARAM(Rtabmap, LoopThr,                     float, 0.11,      "Loop closing threshold.");
+    RTABMAP_PARAM(Rtabmap, LoopRatio,                   float, 0,         "The loop closure hypothesis must be over LoopRatio x lastHypothesisValue.");
+    RTABMAP_PARAM(Rtabmap, LoopGPS,                     bool,  true,      uFormat("Use GPS to filter likelihood (if GPS is recorded). Only locations inside the local radius \"%s\" of the current GPS location are considered for loop closure detection.", kRGBDLocalRadius().c_str()));
+    RTABMAP_PARAM(Rtabmap, LoopAdditionalRegistrations, unsigned int, 0,  "Maximum number of additional loop closure registrations to attempt after highest-hypothesis registration fails.");
 
     // Memory
     RTABMAP_PARAM(Mem, RehearsalSimilarity,         float, 0.6,     "Rehearsal similarity.");

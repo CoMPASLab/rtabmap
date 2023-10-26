@@ -97,6 +97,7 @@ Rtabmap::Rtabmap() :
     _maxMemoryAllowed(Parameters::defaultRtabmapMemoryThr()), // 0=inf
     _loopThr(Parameters::defaultRtabmapLoopThr()),
     _loopRatio(Parameters::defaultRtabmapLoopRatio()),
+    _loopAdditionalRegistrations(Parameters::defaultRtabmapLoopAdditionalRegistrations()),
     _maxLoopClosureDistance(Parameters::defaultRGBDMaxLoopClosureDistance()),
     _verifyLoopClosureHypothesis(Parameters::defaultVhEpEnabled()),
     _maxRetrieved(Parameters::defaultRtabmapMaxRetrieved()),
@@ -559,6 +560,7 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
     Parameters::parse(parameters, Parameters::kRtabmapMemoryThr(), _maxMemoryAllowed);
     Parameters::parse(parameters, Parameters::kRtabmapLoopThr(), _loopThr);
     Parameters::parse(parameters, Parameters::kRtabmapLoopRatio(), _loopRatio);
+    Parameters::parse(parameters, Parameters::kRtabmapLoopAdditionalRegistrations(), _loopAdditionalRegistrations);
     Parameters::parse(parameters, Parameters::kRGBDMaxLoopClosureDistance(), _maxLoopClosureDistance);
     Parameters::parse(parameters, Parameters::kVhEpEnabled(), _verifyLoopClosureHypothesis);
     Parameters::parse(parameters, Parameters::kRtabmapMaxRetrieved(), _maxRetrieved);
@@ -1928,18 +1930,51 @@ bool Rtabmap::process(const SensorData& data,
             }
 
             //============================================================
-            // Select the highest hypothesis
+            // Populate _loopClosureHypotheses in order of likelihood
             //============================================================
             ULOGGER_INFO("creating hypotheses...");
-            if(posterior.size())
+            _loopClosureHypotheses.clear();
+            if (posterior.size())
             {
+                // Populate _loopClosureHypotheses from the posterior map
                 for(std::map<int, float>::const_reverse_iterator iter = posterior.rbegin(); iter != posterior.rend(); ++iter)
                 {
-                    if(iter->first > 0 && iter->second > _highestHypothesis.second)
+                    if(iter->first > 0)
                     {
-                        _highestHypothesis = *iter;
+                        _loopClosureHypotheses.push_back(std::make_pair(iter->first, iter->second));
                     }
                 }
+
+                // Define a comparator for sorting the loop closure hypotheses by likelihood
+                auto comparator = [](const std::pair<int, float> & a, const std::pair<int, float> & b) -> bool
+                {
+                    return a.second < b.second;
+                };
+
+                _loopClosureHypotheses.sort(comparator);
+
+                // Print the hypotheses in order of likelihood
+                for(const auto& hypothesis : _loopClosureHypotheses)
+                {
+                    UDEBUG("Hypothesis %d: %f", hypothesis.first, hypothesis.second);
+                }
+            }
+
+            //============================================================
+            // Select the highest hypothesis
+            //============================================================
+            if(_loopClosureHypotheses.size())
+            {
+                // for(std::map<int, float>::const_reverse_iterator iter = posterior.rbegin(); iter != posterior.rend(); ++iter)
+                // {
+                //     if(iter->first > 0 && iter->second > _highestHypothesis.second)
+                //     {
+                //         _highestHypothesis = *iter;
+                //     }
+                // }
+
+                _highestHypothesis = _loopClosureHypotheses.back();
+
                 // With the virtual place, use sum of LC probabilities (1 - virtual place hypothesis).
                 _highestHypothesis.second = 1-posterior.begin()->second;
             }
@@ -2826,33 +2861,42 @@ bool Rtabmap::process(const SensorData& data,
             info.covariance = cv::Mat::eye(6,6,CV_64FC1);
             if(_rgbdSlamMode)
             {
-                transform = _memory->computeTransform(
-                        _loopClosureHypothesis.first,
-                        signature->id(),
-                        _loopClosureIdentityGuess?Transform::getIdentity():Transform(),
-                        &info);
+                unsigned int registrationsAttempted = 0;
+                for(std::list<std::pair<int, float> >::const_reverse_iterator iter = _loopClosureHypotheses.rbegin(); iter != _loopClosureHypotheses.rend() && registrationsAttempted + 1 < _loopAdditionalRegistrations; iter++)
+                {
+                    transform = _memory->computeTransform(
+                            iter->first,
+                            signature->id(),
+                            _loopClosureIdentityGuess?Transform::getIdentity():Transform(),
+                            &info);
+                    registrationsAttempted++;
 
-                loopClosureVisualInliersMeanDist = info.inliersMeanDistance;
-                loopClosureVisualInliersDistribution = info.inliersDistribution;
+                    loopClosureVisualInliersMeanDist = info.inliersMeanDistance;
+                    loopClosureVisualInliersDistribution = info.inliersDistribution;
 
-                loopClosureVisualInliers = info.inliers;
-                loopClosureVisualInliersRatio = info.inliersRatio;
-                loopClosureVisualMatches = info.matches;
-                rejectedGlobalLoopClosure = transform.isNull();
-                if(rejectedGlobalLoopClosure)
-                {
-                    UWARN("Rejected loop closure %d -> %d: %s",
-                            _loopClosureHypothesis.first, signature->id(), info.rejectedMsg.c_str());
-                }
-                else if(_maxLoopClosureDistance>0.0f && transform.getNorm() > _maxLoopClosureDistance)
-                {
-                    rejectedGlobalLoopClosure = true;
-                    UWARN("Rejected localization %d -> %d because distance to map (%fm) is over %s=%fm.",
-                            _loopClosureHypothesis.first, signature->id(), transform.getNorm(), Parameters::kRGBDMaxLoopClosureDistance().c_str(), _maxLoopClosureDistance);
-                }
-                else
-                {
-                    transform = transform.inverse();
+                    loopClosureVisualInliers = info.inliers;
+                    loopClosureVisualInliersRatio = info.inliersRatio;
+                    loopClosureVisualMatches = info.matches;
+                    rejectedGlobalLoopClosure = transform.isNull();
+                    // Log if it was rejected or not
+                    ULOGGER_INFO("REJECTED STATUS: %s", rejectedGlobalLoopClosure?"true":"false");
+                    if(rejectedGlobalLoopClosure)
+                    {
+                        UWARN("Rejected loop closure %d -> %d: %s",
+                                iter->first, signature->id(), info.rejectedMsg.c_str());
+                    }
+                    else if(_maxLoopClosureDistance>0.0f && transform.getNorm() > _maxLoopClosureDistance)
+                    {
+                        rejectedGlobalLoopClosure = true;
+                        UWARN("Rejected localization %d -> %d because distance to map (%fm) is over %s=%fm.",
+                                iter->first, signature->id(), transform.getNorm(), Parameters::kRGBDMaxLoopClosureDistance().c_str(), _maxLoopClosureDistance);
+                    }
+                    else
+                    {
+                        transform = transform.inverse();
+                        _loopClosureHypothesis = *iter;
+                        break;
+                    }
                 }
             }
             if(!rejectedGlobalLoopClosure)
