@@ -314,11 +314,21 @@ public:
 
     bool isPointVisibleFromCameras(const cv::Point3f & pt) const; // assuming point is in robot frame
 
+    // Set absoluteDepth
     void setAbsoluteDepth(const Depth &absoluteDepth) {
         absoluteDepth_ = absoluteDepth;
     };
-    // Depth measured in relation to absolute reference point
+
+    // Set flag for adding absolute depth constraint
+    void setAddAbsoluteDepthConstraint(bool addAbsoluteDepthConstraint) {
+        addAbsoluteDepthConstraint_ = addAbsoluteDepthConstraint;
+    };
+
+    // Get depth
     const Depth & absoluteDepth() const {return absoluteDepth_;};
+
+    // Get flag for adding absolute depth constraint
+    bool addAbsoluteDepthConstraint() const { return addAbsoluteDepthConstraint_; };
 
     void addArbitraryPoseConstraint(const ArbitraryPoseConstraint &arbitraryPoseConstraint) {
         arbitraryPoseConstraints_.push_back(arbitraryPoseConstraint);
@@ -379,7 +389,9 @@ private:
 
     IMU imu_;
 
+    // Absolute depth constraint
     Depth absoluteDepth_;
+    bool addAbsoluteDepthConstraint_;
 
     std::vector<ArbitraryPoseConstraint> arbitraryPoseConstraints_;
 };

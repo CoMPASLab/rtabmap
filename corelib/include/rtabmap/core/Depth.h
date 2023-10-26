@@ -15,45 +15,53 @@
 namespace rtabmap {
 
 
-// Class for depth measurement messages
+// Class for depth measurement messages for unary absolute depth constraints
 class Depth
 {
 public:
+    // Default initializer
     Depth() {}
-    Depth(const float & depth,
-          cv::Mat covariance,
-            const Transform & baseLinkToDepthSensor = Transform::getIdentity()) :
-        originalDepthMeasurement_(depth),
-        covariance_(covariance),
-        baseLinkToDepthSensor_(baseLinkToDepthSensor)
-    {
-    }
 
-    const float & originalDepthMeasurement() const {return originalDepthMeasurement_;}
-    cv::Mat getCovariance() const {return covariance_;}
+    // Initializer with depth measurement and covariance
+    Depth(const float & depth,
+          const cv::Mat & covariance,
+          const Transform & baseLinkToDepthSensor = Transform::getIdentity())
+        : originalDepthMeasurement_(depth),
+          covariance_(covariance),
+          baseLinkToDepthSensor_(baseLinkToDepthSensor)
+    {}
+
+    // Getter for original depth measurement in sensor link
+    const float & originalDepthMeasurement() const { return originalDepthMeasurement_; }
+
+    // Getter for covariance matrix
+    cv::Mat getCovariance() const { return covariance_; }
+
+    // Getter for depth measurement in base link
     float depthInBaseLink(const Transform & originalOffsetTransform = Transform::getIdentity()) const {
-        // The measurement is already in base_link
-        // Offset depth by difference between original and rotated base_link_to_depth transforms
-        // const float depthDiff = baseLinkToDepthSensor_.z() - (currentBaseLinkRotation * baseLinkToDepthSensor_).z(); 
-        
-        // Transform matrix with original depth measurement
+        // Initialize depth transformation matrix as the identity matrix
         Transform depthTransform = Transform::getIdentity();
+        // Set the transalation z component to the depth measurement in the sensor link in global coordinates
         depthTransform.z() = originalDepthMeasurement_;
+        // Note: As defined in corelib/src/Memory.cpp, the originalOffsetTransform is the transform of the world with
+        // respecto to the original measurement, i.e., Two. Therefore, to get the relative depth transform (Tov), we
+        // need to return Tov = Tow * Twv <-> Tov = originalOffsetTransform * depthTransform.
         return (originalOffsetTransform * depthTransform).z();
     }
+
+    // Getter for transform from base link to depth sensor
     const Transform & localTransform() const {return baseLinkToDepthSensor_;}
 
+    // Getter to check if the base link to depth measurement is not available
     bool empty() const
     {
         return baseLinkToDepthSensor_.isNull();
     }
 
 private:
-    float originalDepthMeasurement_;
-    cv::Mat covariance_;
-
-    // Transform from base link to depth sensor
-    Transform baseLinkToDepthSensor_;
+    float originalDepthMeasurement_;  // Depth measurement in sensor link
+    cv::Mat covariance_;  // 6x6 Covariance Matrix
+    Transform baseLinkToDepthSensor_;  // Transform from base link to depth sensor
 };
 
 }

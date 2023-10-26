@@ -5860,20 +5860,23 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
                 // This is already handled by the depth_filter node, but this is a backup
                 Transform initial_depth_transform(0.0, 0.0, data.absoluteDepth().originalDepthMeasurement(), 0.0, 0.0, 0.0, 1.0);
                 firstAbsoluteDepth_ = initial_depth_transform.inverse();
-            firstAbsoluteDepthSet_ = true;
+                firstAbsoluteDepthSet_ = true;
                 printf("Got first absolute depth: %f\n", firstAbsoluteDepth_.z());
         }
         }
 
-        // Compute depth with respect to the origin of the trajectory
-        if (firstAbsoluteDepthSet_)
+        // Compute depth with respect to the origin of the trajectory if we have an available measurement
+        if (firstAbsoluteDepthSet_ && data.addAbsoluteDepthConstraint())
         {
             float currentDepth = data.absoluteDepth().depthInBaseLink(firstAbsoluteDepth_);
-            // Compute information matrix
+            // Get covariance matrix and compute information matrix (inverse of covariance)
             cv::Mat covariance_matrix = data.absoluteDepth().getCovariance();
+            cv::Mat information_matrix = covariance_matrix.inv();
             // Add unary factor
             printf("Relative depth: %f (original measurement %f)\n", currentDepth, data.absoluteDepth().originalDepthMeasurement());
-            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior, {0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}, covariance_matrix.inv()));
+            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior,{0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}, information_matrix));
+            // Reset add absolute depth constraint flag
+            data.setAddAbsoluteDepthConstraint(false);
         }
 
     }

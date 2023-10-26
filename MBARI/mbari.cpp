@@ -690,7 +690,8 @@ int main(int argc, char * argv[])
             if (useAbsoluteDepths) {
                 lastAbsoluteDepth = newAbsoluteDepth;
                 // TODO: Make covariance matrix for absolute depth to be configurable
-                data.setAbsoluteDepth({newAbsoluteDepth, cv::Mat::eye(6, 6, CV_32FC1) * 1e-6, baseToDepth});
+                cv::Mat depthCovarianceMatrix = cv::Mat::eye(6, 6, CV_32FC1) * 1e-6;
+                data.setAbsoluteDepth({newAbsoluteDepth, depthCovarianceMatrix, baseToDepth});
             }
 
             if (useArbitraryPoseConstraints && data.id() > 1) {
