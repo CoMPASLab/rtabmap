@@ -5855,7 +5855,8 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
         // Set value for first depth measurement
         if (!firstAbsoluteDepthSet_)
         {
-            if (!std::isnan(data.absoluteDepth().originalDepthMeasurement())){
+            if (!std::isnan(data.absoluteDepth().originalDepthMeasurement()) &&
+                std::abs(data.absoluteDepth().originalDepthMeasurement()) != std::numeric_limits<float>::infinity()){
                 // Create transform with first depth measurement
                 // This is already handled by the depth_filter node, but this is a backup
                 Transform initial_depth_transform(0.0, 0.0, data.absoluteDepth().originalDepthMeasurement(), 0.0, 0.0, 0.0, 1.0);
