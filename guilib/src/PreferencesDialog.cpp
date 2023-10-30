@@ -938,6 +938,7 @@ PreferencesDialog::PreferencesDialog(QWidget * parent) :
 	// Create hypotheses
 	_ui->general_doubleSpinBox_hardThr->setObjectName(Parameters::kRtabmapLoopThr().c_str());
 	_ui->general_doubleSpinBox_loopRatio->setObjectName(Parameters::kRtabmapLoopRatio().c_str());
+	_ui->general_spinBox_loopAdditionalRegistrations->setObjectName(Parameters::kRtabmapLoopAdditionalRegistrations().c_str());
 
 	//Bayes
 	_ui->general_doubleSpinBox_vp->setObjectName(Parameters::kBayesVirtualPlacePriorThr().c_str());
