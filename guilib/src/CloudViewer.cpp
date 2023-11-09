@@ -168,6 +168,9 @@ CloudViewer::CloudViewer(QWidget *parent, CloudViewerInteractorStyle * style) :
 #endif
 
 	_visualizer->setShowFPS(false);
+
+    // Disable VTK9-induced warning spam if on Ubuntu 22
+	_visualizer->getRenderWindow()->GlobalWarningDisplayOff();
 	
 	int viewport;
 	// Layer 0: unavailable layer, used as "all" by PCLVisualizer
