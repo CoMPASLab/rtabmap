@@ -69,6 +69,7 @@ RegistrationVis::RegistrationVis(const ParametersMap & parameters, Registration 
 		_PnPReprojError(Parameters::defaultVisPnPReprojError()),
 		_PnPFlags(Parameters::defaultVisPnPFlags()),
 		_PnPRefineIterations(Parameters::defaultVisPnPRefineIterations()),
+		_PnPMaxVar(Parameters::defaultVisPnPMaxVariance()),
 		_correspondencesApproach(Parameters::defaultVisCorType()),
 		_flowWinSize(Parameters::defaultVisCorFlowWinSize()),
 		_flowIterations(Parameters::defaultVisCorFlowIterations()),
@@ -124,6 +125,7 @@ void RegistrationVis::parseParameters(const ParametersMap & parameters)
 	Parameters::parse(parameters, Parameters::kVisPnPReprojError(), _PnPReprojError);
 	Parameters::parse(parameters, Parameters::kVisPnPFlags(), _PnPFlags);
 	Parameters::parse(parameters, Parameters::kVisPnPRefineIterations(), _PnPRefineIterations);
+	Parameters::parse(parameters, Parameters::kVisPnPMaxVariance(), _PnPMaxVar);
 	Parameters::parse(parameters, Parameters::kVisCorType(), _correspondencesApproach);
 	Parameters::parse(parameters, Parameters::kVisCorFlowWinSize(), _flowWinSize);
 	Parameters::parse(parameters, Parameters::kVisCorFlowIterations(), _flowIterations);
@@ -287,6 +289,7 @@ Transform RegistrationVis::computeTransformationImpl(
 	UDEBUG("%s=%f", Parameters::kVisEpipolarGeometryVar().c_str(), _epipolarGeometryVar);
 	UDEBUG("%s=%f", Parameters::kVisPnPReprojError().c_str(), _PnPReprojError);
 	UDEBUG("%s=%d", Parameters::kVisPnPFlags().c_str(), _PnPFlags);
+	UDEBUG("%s=%f", Parameters::kVisPnPMaxVariance().c_str(), _PnPMaxVar);
 	UDEBUG("%s=%d", Parameters::kVisCorType().c_str(), _correspondencesApproach);
 	UDEBUG("%s=%d", Parameters::kVisCorFlowWinSize().c_str(), _flowWinSize);
 	UDEBUG("%s=%d", Parameters::kVisCorFlowIterations().c_str(), _flowIterations);
@@ -487,9 +490,9 @@ Transform RegistrationVis::computeTransformationImpl(
 				bool guessSet = !guess.isIdentity() && !guess.isNull();
 				if(guessSet)
 				{
-					if(fromSignature.sensorData().cameraModels().size() == 1 || fromSignature.sensorData().cameraModels().size() == 1)
+					if(toSignature.sensorData().cameraModels().size() == 1 || toSignature.sensorData().stereoCameraModels().size() == 1)
 					{
-						Transform localTransform = fromSignature.sensorData().cameraModels().size()?fromSignature.sensorData().cameraModels()[0].localTransform():fromSignature.sensorData().stereoCameraModels()[0].left().localTransform();
+						Transform localTransform = toSignature.sensorData().cameraModels().size()?toSignature.sensorData().cameraModels()[0].localTransform():toSignature.sensorData().stereoCameraModels()[0].left().localTransform();
 						Transform guessCameraRef = (guess * localTransform).inverse();
 						cv::Mat R = (cv::Mat_<double>(3,3) <<
 								(double)guessCameraRef.r11(), (double)guessCameraRef.r12(), (double)guessCameraRef.r13(),
@@ -498,7 +501,7 @@ Transform RegistrationVis::computeTransformationImpl(
 						cv::Mat rvec(1,3, CV_64FC1);
 						cv::Rodrigues(R, rvec);
 						cv::Mat tvec = (cv::Mat_<double>(1,3) << (double)guessCameraRef.x(), (double)guessCameraRef.y(), (double)guessCameraRef.z());
-						cv::Mat K = fromSignature.sensorData().cameraModels().size()?fromSignature.sensorData().cameraModels()[0].K():fromSignature.sensorData().stereoCameraModels()[0].left().K();
+						cv::Mat K = toSignature.sensorData().cameraModels().size()?toSignature.sensorData().cameraModels()[0].K():toSignature.sensorData().stereoCameraModels()[0].left().K();
 						cv::projectPoints(kptsFrom3D, rvec, tvec, K, cv::Mat(), cornersTo);
 					}
 					else
@@ -1580,6 +1583,7 @@ Transform RegistrationVis::computeTransformationImpl(
 									_PnPReprojError,
 									_PnPFlags,
 									_PnPRefineIterations,
+									_PnPMaxVar,
 									dir==0?(!guess.isNull()?guess:Transform::getIdentity()):!transforms[0].isNull()?transforms[0].inverse():(!guess.isNull()?guess.inverse():Transform::getIdentity()),
 									words3B,
 									&covariances[dir],
@@ -1601,6 +1605,7 @@ Transform RegistrationVis::computeTransformationImpl(
 									_PnPReprojError,
 									_PnPFlags,
 									_PnPRefineIterations,
+									_PnPMaxVar,
 									dir==0?(!guess.isNull()?guess:Transform::getIdentity()):!transforms[0].isNull()?transforms[0].inverse():(!guess.isNull()?guess.inverse():Transform::getIdentity()),
 									words3B,
 									&covariances[dir],
@@ -1977,30 +1982,30 @@ Transform RegistrationVis::computeTransformationImpl(
 		if(!transform.isNull() && !allInliers.empty() && (_minInliersDistributionThr>0.0f || _maxInliersMeanDistance>0.0f))
 		{
 			cv::Mat pcaData;
-			float cx=0, cy=0, w=0, h=0;
+			std::vector<CameraModel> cameraModelsTo;
+			if(toSignature.sensorData().stereoCameraModels().size())
+			{
+				for(size_t i=0; i<toSignature.sensorData().stereoCameraModels().size(); ++i)
+				{
+					cameraModelsTo.push_back(toSignature.sensorData().stereoCameraModels()[i].left());
+				}
+			}
+			else
+			{
+				cameraModelsTo = toSignature.sensorData().cameraModels();
+			}
 			if(_minInliersDistributionThr > 0)
 			{
-				if((toSignature.sensorData().stereoCameraModels().size() == 1 && toSignature.sensorData().stereoCameraModels()[0].isValidForProjection()) ||
-					(toSignature.sensorData().cameraModels().size() == 1 && toSignature.sensorData().cameraModels()[0].isValidForReprojection()))
+				if(cameraModelsTo.size() >= 1 && cameraModelsTo[0].isValidForReprojection())
 				{
-					const CameraModel & cameraModel = toSignature.sensorData().stereoCameraModels().size()?toSignature.sensorData().stereoCameraModels()[0].left():toSignature.sensorData().cameraModels()[0];
-					cx = cameraModel.cx();
-					cy = cameraModel.cy();
-					w = cameraModel.imageWidth();
-					h = cameraModel.imageHeight();
-
-					if(w>0 && h>0)
+					if(cameraModelsTo[0].imageWidth()>0 && cameraModelsTo[0].imageHeight()>0)
 					{
 						pcaData = cv::Mat(allInliers.size(), 2, CV_32FC1);
 					}
 					else
 					{
-						UERROR("Invalid calibration image size (%dx%d), cannot compute inliers distribution! (see %s=%f)", w, h, Parameters::kVisMinInliersDistribution().c_str(), _minInliersDistributionThr);
+						UERROR("Invalid calibration image size (%dx%d), cannot compute inliers distribution! (see %s=%f)", cameraModelsTo[0].imageWidth(), cameraModelsTo[0].imageHeight(), Parameters::kVisMinInliersDistribution().c_str(), _minInliersDistributionThr);
 					}
-				}
-				else if(toSignature.sensorData().cameraModels().size() > 1 || toSignature.sensorData().stereoCameraModels().size() > 1)
-				{
-					UERROR("Multi-camera not supported when computing inliers distribution! (see %s=%f)", Parameters::kVisMinInliersDistribution().c_str(), _minInliersDistributionThr);
 				}
 				else
 				{
@@ -2016,27 +2021,31 @@ Transform RegistrationVis::computeTransformationImpl(
 			}
 			for(unsigned int i=0; i<allInliers.size(); ++i)
 			{
-				if(_maxInliersMeanDistance>0.0f)
+				std::multimap<int, int>::const_iterator wordsIter = toSignature.getWords().find(allInliers[i]);
+				if(wordsIter != toSignature.getWords().end() && !toSignature.getWordsKpts().empty())
 				{
-					std::multimap<int, int>::const_iterator wordsIter = fromSignature.getWords().find(allInliers[i]);
-					if(wordsIter != fromSignature.getWords().end() && !fromSignature.getWords3().empty())
+					const cv::KeyPoint & kpt = toSignature.getWordsKpts()[wordsIter->second];
+					int cameraIndex = (int)(kpt.pt.x / cameraModelsTo[0].imageWidth());
+					UASSERT_MSG(cameraIndex < (int)cameraModelsTo.size(), uFormat("cameraIndex=%d (x=%f models=%d camera width = %d)", cameraIndex, kpt.pt.x, (int)cameraModelsTo.size(), cameraModelsTo[0].imageWidth()).c_str());
+
+					if(_maxInliersMeanDistance>0.0f && !toSignature.getWords3().empty())
 					{
-						const cv::Point3f & pt = fromSignature.getWords3()[wordsIter->second];
-						if(uIsFinite(pt.x))
+						const cv::Point3f & pt = toSignature.getWords3()[wordsIter->second];
+						if(util3d::isFinite(pt))
 						{
-							distances.push_back(util3d::transformPoint(pt, transformInv).x);
+							UASSERT(cameraModelsTo[cameraIndex].isValidForProjection());
+
+							float depth = util3d::transformPoint(pt, cameraModelsTo[cameraIndex].localTransform().inverse()).z;
+							distances.push_back(depth);
 						}
 					}
-				}
 
-				if(!pcaData.empty())
-				{
-					std::multimap<int, int>::const_iterator wordsIter = fromSignature.getWords().find(allInliers[i]);
-					UASSERT(wordsIter != fromSignature.getWords().end() && !fromSignature.getWordsKpts().empty());
-					float * ptr = pcaData.ptr<float>(i, 0);
-					const cv::KeyPoint & kpt = fromSignature.getWordsKpts()[wordsIter->second];
-					ptr[0] = (kpt.pt.x-cx) / w;
-					ptr[1] = (kpt.pt.y-cy) / h;
+					if(!pcaData.empty())
+					{
+						float * ptr = pcaData.ptr<float>(i, 0);
+						ptr[0] = (kpt.pt.x-cameraIndex*cameraModelsTo[cameraIndex].imageWidth()-cameraModelsTo[cameraIndex].cx()) / cameraModelsTo[cameraIndex].imageWidth();
+						ptr[1] = (kpt.pt.y-cameraModelsTo[cameraIndex].cy()) / cameraModelsTo[cameraIndex].imageHeight();
+					}
 				}
 			}
 

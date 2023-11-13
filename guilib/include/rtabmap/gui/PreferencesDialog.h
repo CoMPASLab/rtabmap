@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RTABMAP_PREFERENCESDIALOG_H_
 #define RTABMAP_PREFERENCESDIALOG_H_
 
-#include "rtabmap/gui/RtabmapGuiExp.h" // DLL export/import defines
+#include "rtabmap/gui/rtabmap_gui_export.h" // DLL export/import defines
 
 #include <QDialog>
 #include <QtCore/QModelIndex>
@@ -63,7 +63,7 @@ class Camera;
 class CalibrationDialog;
 class CreateSimpleCalibrationDialog;
 
-class RTABMAPGUI_EXP PreferencesDialog : public QDialog
+class RTABMAP_GUI_EXPORT PreferencesDialog : public QDialog
 {
 	Q_OBJECT
 
@@ -162,6 +162,7 @@ public:
 	bool isPosteriorGraphView() const;
 	bool isWordsCountGraphView() const;
 	bool isLocalizationsCountGraphView() const;
+	bool isRelocalizationColorOdomCacheGraphView() const;
 	int getOdomRegistrationApproach() const;
 	double getOdomF2MGravitySigma() const;
 	bool isOdomDisabled() const;
@@ -285,6 +286,7 @@ public:
 
 	//
 	bool isImagesKept() const;
+	bool isMissingCacheRepublished() const;
 	bool isCloudsKept() const;
 	float getTimeLimit() const;
 	float getDetectionRate() const;

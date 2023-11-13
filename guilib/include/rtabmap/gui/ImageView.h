@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RTABMAP_IMAGEVIEW_H_
 #define RTABMAP_IMAGEVIEW_H_
 
-#include "rtabmap/gui/RtabmapGuiExp.h" // DLL export/import defines
+#include "rtabmap/gui/rtabmap_gui_export.h" // DLL export/import defines
 
 #include <QGraphicsView>
 #include <QtCore/QRectF>
@@ -45,7 +45,7 @@ namespace rtabmap {
 
 class KeypointItem;
 
-class RTABMAPGUI_EXP ImageView : public QWidget {
+class RTABMAP_GUI_EXPORT ImageView : public QWidget {
 
 	Q_OBJECT
 
@@ -63,6 +63,7 @@ public:
 	bool isLinesShown() const;
 	int getAlpha() const {return _alpha;}
 	int getFeaturesSize() const {return _featuresSize;}
+	int getLinesWidth() const {return _linesWidth;}
 	bool isGraphicsViewMode() const;
 	bool isGraphicsViewScaled() const;
 	bool isGraphicsViewScaledToHeight() const;
@@ -71,7 +72,8 @@ public:
 	const QColor & getDefaultMatchingFeatureColor() const;
 	const QColor & getDefaultMatchingLineColor() const;
 	const QColor & getBackgroundColor() const;
-	float getDepthColorMapRange() const;
+	float getDepthColorMapMinRange() const;
+	float getDepthColorMapMaxRange() const;
 	uCvQtDepthColorMap getDepthColorMap() const;
 
 	float viewScale() const;
@@ -88,7 +90,7 @@ public:
 	void setDefaultMatchingFeatureColor(const QColor & color);
 	void setDefaultMatchingLineColor(const QColor & color);
 	void setBackgroundColor(const QColor & color);
-	void setDepthColorMapRange(float value);
+	void setDepthColorMapRange(float min, float max);
 
 	void setFeatures(const std::multimap<int, cv::KeyPoint> & refWords, const cv::Mat & depth = cv::Mat(), const QColor & color = Qt::yellow);
 	void setFeatures(const std::vector<cv::KeyPoint> & features, const cv::Mat & depth = cv::Mat(), const QColor & color = Qt::yellow);
@@ -101,6 +103,7 @@ public:
 	void setFeaturesColor(QColor color);
 	void setAlpha(int alpha);
 	void setFeaturesSize(int size);
+	void setLinesWidth(int width);
 	void setSceneRect(const QRectF & rect);
 
 	const QMultiMap<int, rtabmap::KeypointItem *> & getFeatures() const {return _features;}
@@ -131,11 +134,13 @@ private:
 	QString _savedFileName;
 	int _alpha;
 	int _featuresSize;
+	int _linesWidth;
 	QColor _defaultBgColor;
 	QColor _defaultFeatureColor;
 	QColor _defaultMatchingFeatureColor;
 	QColor _defaultMatchingLineColor;
-	float _depthColorMapRange;
+	float _depthColorMapMinRange;
+	float _depthColorMapMaxRange;
 
 	QMenu * _menu;
 	QAction * _showImage;
@@ -148,6 +153,7 @@ private:
 	QAction * _saveImage;
 	QAction * _setAlpha;
 	QAction * _setFeaturesSize;
+	QAction * _setLinesWidth;
 	QAction * _graphicsViewMode;
 	QAction * _graphicsViewScaled;
 	QAction * _graphicsViewScaledToHeight;
@@ -156,7 +162,8 @@ private:
 	QAction * _colorMapBlackToWhite;
 	QAction * _colorMapRedToBlue;
 	QAction * _colorMapBlueToRed;
-	QAction * _colorMapRange;
+	QAction * _colorMapMinRange;
+	QAction * _colorMapMaxRange;
 	QMenu * _featureMenu;
 	QMenu * _scaleMenu;
 

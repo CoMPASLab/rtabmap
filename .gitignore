@@ -17,3 +17,5 @@ __pycache__/
 .cache/
 build/
 backup/
+build_*
+*.bak

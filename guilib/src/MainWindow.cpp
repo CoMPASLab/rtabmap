@@ -168,6 +168,7 @@ MainWindow::MainWindow(PreferencesDialog * prefDialog, QWidget * parent, bool sh
 	_processingOdometry(false),
 	_oneSecondTimer(0),
 	_elapsedTime(0),
+	_logEventTime(0),
 	_posteriorCurve(0),
 	_likelihoodCurve(0),
 	_rawLikelihoodCurve(0),
@@ -266,10 +267,10 @@ MainWindow::MainWindow(PreferencesDialog * prefDialog, QWidget * parent, bool sh
 	// Timer
 	_oneSecondTimer = new QTimer(this);
 	_oneSecondTimer->setInterval(1000);
-	_elapsedTime = new QTime();
+	_elapsedTime = new QElapsedTimer();
 	_ui->label_elapsedTime->setText("00:00:00");
 	connect(_oneSecondTimer, SIGNAL(timeout()), this, SLOT(updateElapsedTime()));
-	_logEventTime = new QTime();
+	_logEventTime = new QElapsedTimer();
 	_logEventTime->start();
 
 	//Graphics scenes
@@ -452,7 +453,8 @@ MainWindow::MainWindow(PreferencesDialog * prefDialog, QWidget * parent, bool sh
 	connect(_ui->actionStereoUsb, SIGNAL(triggered()), this, SLOT(selectStereoUsb()));
 	connect(_ui->actionRealSense2_T265, SIGNAL(triggered()), this, SLOT(selectRealSense2Stereo()));
 	connect(_ui->actionMYNT_EYE_S_SDK, SIGNAL(triggered()), this, SLOT(selectMyntEyeS()));
-	connect(_ui->actionDepthAI, SIGNAL(triggered()), this, SLOT(selectDepthAI()));
+	connect(_ui->actionDepthAI_oakd, SIGNAL(triggered()), this, SLOT(selectDepthAIOAKD()));
+	connect(_ui->actionDepthAI_oakdlite, SIGNAL(triggered()), this, SLOT(selectDepthAIOAKDLite()));
 	_ui->actionFreenect->setEnabled(CameraFreenect::available());
 	_ui->actionOpenNI_CV->setEnabled(CameraOpenNICV::available());
 	_ui->actionOpenNI_CV_ASUS->setEnabled(CameraOpenNICV::available());
@@ -475,7 +477,8 @@ MainWindow::MainWindow(PreferencesDialog * prefDialog, QWidget * parent, bool sh
 	_ui->actionZed_Open_Capture->setEnabled(CameraStereoZedOC::available());
     _ui->actionStereoTara->setEnabled(CameraStereoTara::available());
     _ui->actionMYNT_EYE_S_SDK->setEnabled(CameraMyntEye::available());
-    _ui->actionDepthAI->setEnabled(CameraDepthAI::available());
+    _ui->actionDepthAI_oakd->setEnabled(CameraDepthAI::available());
+    _ui->actionDepthAI_oakdlite->setEnabled(CameraDepthAI::available());
 	this->updateSelectSourceMenu();
 
 	connect(_ui->actionPreferences, SIGNAL(triggered()), this, SLOT(openPreferences()));
@@ -692,6 +695,7 @@ MainWindow::~MainWindow()
 	this->stopDetection();
 	delete _ui;
 	delete _elapsedTime;
+	delete _logEventTime;
 #ifdef RTABMAP_OCTOMAP
 	delete _octomap;
 #endif
@@ -1576,7 +1580,7 @@ void MainWindow::processOdometry(const rtabmap::OdometryEvent & odom, bool dataI
 #if PCL_VERSION_COMPARE(>=, 1, 7, 2)
 		if(_preferencesDialog->isFramesShown())
 		{
-			_cloudViewer->addOrUpdateLine("odom_to_base_link", _odometryCorrection, _odometryCorrection*odom.pose(), qRgb(255, 128, 0), false, false);
+			_cloudViewer->addOrUpdateLine("odom_to_base_link", _odometryCorrection, _odometryCorrection*odom.pose(), qRgb(255, 128, 0), true, false);
 		}
 		else
 		{
@@ -1891,7 +1895,7 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 {
 	_processingStatistics = true;
 	ULOGGER_DEBUG("");
-	QTime time, totalTime;
+	QElapsedTimer time, totalTime;
 	time.start();
 	totalTime.start();
 	//Affichage des stats et images
@@ -1991,6 +1995,39 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 						}
 					}
 					_cachedWordsCount.insert(std::make_pair(signature.id(), (float)count));
+				}
+			}
+		}
+
+		// Add data
+		for(std::map<int, Signature>::const_iterator iter = stat.getSignaturesData().begin();
+			iter!=stat.getSignaturesData().end();
+			++iter)
+		{
+			if(signature.id() != iter->first &&
+				(!_cachedSignatures.contains(iter->first) ||
+				 (_cachedSignatures.value(iter->first).sensorData().imageCompressed().empty() && !iter->second.sensorData().imageCompressed().empty())))
+			{
+				_cachedSignatures.insert(iter->first, iter->second);
+				_cachedMemoryUsage += iter->second.sensorData().getMemoryUsed();
+				unsigned int count = 0;
+				if(!iter->second.getWords3().empty())
+				{
+					for(std::multimap<int, int>::const_iterator jter=iter->second.getWords().upper_bound(-1); jter!=iter->second.getWords().end(); ++jter)
+					{
+						if(util3d::isFinite(iter->second.getWords3()[jter->second]))
+						{
+							++count;
+						}
+					}
+				}
+				_cachedWordsCount.insert(std::make_pair(iter->first, (float)count));
+				UINFO("Added node data %d [map=%d] to cache", iter->first, iter->second.mapId());
+
+				_currentMapIds.insert(std::make_pair(iter->first, iter->second.mapId()));
+				if(!iter->second.getGroundTruthPose().isNull())
+				{
+					_currentGTPosesMap.insert(std::make_pair(iter->first, iter->second.getGroundTruthPose()));
 				}
 			}
 		}
@@ -2103,6 +2140,7 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 				}
 				else if(landmarkId!=0)
 				{
+					highestHypothesisId = landmarkNodeRef;
 					if(rejectedHyp)
 					{
 						show = _preferencesDialog->imageRejectedShown();
@@ -2185,12 +2223,30 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 					//draw markers
 					if(!signature.getLandmarks().empty())
 					{
-						refImage = refImage.clone();
+						if(refImage.channels() == 1)
+						{
+							cv::Mat imgColor;
+							cvtColor(refImage, imgColor, cv::COLOR_GRAY2BGR);
+							refImage = imgColor;
+						}
+						else
+						{
+							refImage = refImage.clone();
+						}
 						drawLandmarks(refImage, signature);
 					}
 					if(!loopSignature.getLandmarks().empty())
 					{
-						loopImage = loopImage.clone();
+						if(loopImage.channels() == 1)
+						{
+							cv::Mat imgColor;
+							cv::cvtColor(loopImage, imgColor, cv::COLOR_GRAY2BGR);
+							loopImage = imgColor;
+						}
+						else
+						{
+							loopImage = loopImage.clone();
+						}
 						drawLandmarks(loopImage, loopSignature);
 					}
 				}
@@ -2372,21 +2428,6 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 
 			UDEBUG("time= %d ms (update gt-gps stuff)", time.restart());
 
-#if PCL_VERSION_COMPARE(>=, 1, 7, 2)
-			if(_preferencesDialog->isFramesShown())
-			{
-				_cloudViewer->addOrUpdateCoordinate("map_frame", Transform::getIdentity(), 0.5, false);
-				_cloudViewer->addOrUpdateCoordinate("odom_frame", _odometryCorrection, 0.35, false);
-				_cloudViewer->addOrUpdateLine("map_to_odom", Transform::getIdentity(), _odometryCorrection, qRgb(255, 128, 0), false, false);
-			}
-			else
-			{
-				_cloudViewer->removeLine("map_to_odom");
-				_cloudViewer->removeCoordinate("odom_frame");
-				_cloudViewer->removeCoordinate("map_frame");
-			}
-#endif
-
 			UDEBUG("%d %d %d", poses.size(), poses.size()?poses.rbegin()->first:0, stat.refImageId());
 			if(!_odometryReceived && poses.size() && poses.rbegin()->first == stat.refImageId())
 			{
@@ -2470,6 +2511,28 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 					_ui->statsToolBox->updateStat(iter->first.c_str(), _preferencesDialog->isTimeUsedInFigures()?stat.stamp()-_firstStamp:stat.refImageId(), int(iter->second), _preferencesDialog->isCacheSavedInFigures());
 				}
 			}
+
+#if PCL_VERSION_COMPARE(>=, 1, 7, 2)
+			if(_preferencesDialog->isFramesShown())
+			{
+				_cloudViewer->addOrUpdateCoordinate("map_frame", Transform::getIdentity(), 0.5, false);
+				_cloudViewer->addOrUpdateCoordinate("odom_frame", _odometryCorrection, 0.35, false);
+				_cloudViewer->addOrUpdateLine("map_to_odom", Transform::getIdentity(), _odometryCorrection, qRgb(255, 128, 0), true, false);
+				if(_preferencesDialog->isLabelsShown())
+				{
+					_cloudViewer->addOrUpdateText("map_frame_label", "map",	Transform::getIdentity(), 0.1, Qt::white);
+					_cloudViewer->addOrUpdateText("odom_frame_label", "odom", _odometryCorrection, 0.1, Qt::white);
+				}
+			}
+			else
+			{
+				_cloudViewer->removeLine("map_to_odom");
+				_cloudViewer->removeCoordinate("odom_frame");
+				_cloudViewer->removeCoordinate("map_frame");
+				_cloudViewer->removeText("map_frame_label");
+				_cloudViewer->removeText("odom_frame_label");
+			}
+#endif
 		}
 
 		if( _ui->graphicsView_graphView->isVisible())
@@ -2492,6 +2555,26 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 				{
 					_ui->graphicsView_graphView->updatePosterior(_cachedLocalizationsCount, 1.0f);
 				}
+			}
+			if(_preferencesDialog->isRelocalizationColorOdomCacheGraphView() && !stat.odomCachePoses().empty())
+			{
+				std::map<int, float> colors;
+				colors.insert(std::make_pair(stat.odomCachePoses().rbegin()->first, 240));
+				for(std::multimap<int, Link>::const_iterator iter=stat.odomCacheConstraints().begin(); iter!=stat.odomCacheConstraints().end(); ++iter)
+				{
+					if(iter->second.type() != Link::kNeighbor)
+					{
+						uInsert(colors, std::pair<int,float>(iter->second.from()>iter->second.to()?iter->second.from():iter->second.to(), 120)); //green
+					}
+				}
+				for(std::map<int, Transform>::const_iterator iter=stat.odomCachePoses().begin(); iter!=stat.odomCachePoses().end(); ++iter)
+				{
+					if(stat.poses().find(iter->first) == stat.poses().end())
+					{
+						colors.insert(std::make_pair(iter->first, 240)); //red
+					}
+				}
+				_ui->graphicsView_graphView->updatePosterior(colors, 240);
 			}
 			// update local path on the graph view
 			_ui->graphicsView_graphView->updateLocalPath(stat.localPath());
@@ -2523,6 +2606,43 @@ void MainWindow::processStats(const rtabmap::Statistics & stat)
 			s.sensorData().clearRawData();
 			s.sensorData().clearOccupancyGridRaw();
 			_cachedMemoryUsage += s.sensorData().getMemoryUsed();
+		}
+
+		// Check missing cache
+		if(stat.getSignaturesData().size() <= 1)
+		{
+			if(_preferencesDialog->isMissingCacheRepublished() &&
+			   _preferencesDialog->isImagesKept() &&
+			   atoi(_preferencesDialog->getParameter(Parameters::kRtabmapMaxRepublished()).c_str()) > 0)
+			{
+				std::vector<int> missingIds;
+				bool ignoreNewData = smallMovement || fastMovement || signature.getWeight()<0;
+				std::set<int> ids = uKeysSet(stat.poses());
+				if(ids.empty())
+				{
+					// In appearance-only mode
+					ids = uKeysSet(stat.posterior());
+				}
+				for(std::set<int>::const_iterator iter=ids.lower_bound(1); iter!=ids.end(); ++iter)
+				{
+					if(!ignoreNewData || stat.refImageId() != *iter)
+					{
+						QMap<int, Signature>::iterator ster = _cachedSignatures.find(*iter);
+						if(ster == _cachedSignatures.end() ||
+							(ster.value().getWeight() >=0 && // ignore intermediate nodes
+							 ster.value().sensorData().imageCompressed().empty() &&
+							 ster.value().sensorData().depthOrRightCompressed().empty() &&
+							 ster.value().sensorData().laserScanCompressed().empty()))
+						{
+							missingIds.push_back(*iter);
+						}
+					}
+				}
+				if(!missingIds.empty())
+				{
+					this->post(new RtabmapEventCmd(RtabmapEventCmd::kCmdRepublishData, UVariant(missingIds)));
+				}
+			}
 		}
 
 		UDEBUG("time= %d ms (update cache)", time.restart());
@@ -4603,8 +4723,7 @@ void MainWindow::processRtabmapGlobalPathEvent(const rtabmap::RtabmapGlobalPathE
 	else if(event.getPoses().empty() && _waypoints.size())
 	{
 		// resend the same goal
-		uSleep(1000);
-		this->postGoal(_waypoints.at(_waypointsIndex % _waypoints.size()));
+		QTimer::singleShot(1000, this, SLOT(postGoal()));
 	}
 }
 
@@ -4851,7 +4970,12 @@ void MainWindow::drawKeypoints(const std::multimap<int, cv::KeyPoint> & refWords
 		{
 			_lastId = (*refWords.rbegin()).first;
 		}
-		_lastIds = QSet<int>::fromList(QList<int>::fromStdList(uKeysList(refWords)));
+		std::list<int> kpts = uKeysList(refWords);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+		_lastIds = QSet<int>(kpts.begin(), kpts.end());
+#else
+		_lastIds = QSet<int>::fromList(QList<int>::fromStdList(kpts));
+#endif
 	}
 
 	// Draw lines between corresponding features...
@@ -4909,44 +5033,72 @@ void MainWindow::drawLandmarks(cv::Mat & image, const Signature & signature)
 {
 	for(std::map<int, Link>::const_iterator iter=signature.getLandmarks().begin(); iter!=signature.getLandmarks().end(); ++iter)
 	{
-		CameraModel model;
-		if(!signature.sensorData().cameraModels().empty() &&
-			signature.sensorData().cameraModels()[0].isValidForProjection())
+		// Project in all cameras in which the landmark is visible
+		for(size_t i=0; i<signature.sensorData().cameraModels().size() || i<signature.sensorData().stereoCameraModels().size(); ++i)
 		{
-			model = signature.sensorData().cameraModels()[0];
-		}
-		else if(!signature.sensorData().stereoCameraModels().empty() &&
-				signature.sensorData().stereoCameraModels()[0].isValidForProjection())
-		{
-			model = signature.sensorData().stereoCameraModels()[0].left();
-		}
-		if(model.isValidForProjection())
-		{
-			Transform t = model.localTransform().inverse() * iter->second.transform();
-			cv::Vec3d rvec, tvec;
-			tvec.val[0] = t.x();
-			tvec.val[1] = t.y();
-			tvec.val[2] = t.z();
-			cv::Mat R;
-			t.rotationMatrix().convertTo(R, CV_64F);
-			cv::Rodrigues(R, rvec);
+			CameraModel model;
+			if(i<signature.sensorData().cameraModels().size())
+			{
+				model = signature.sensorData().cameraModels()[i];
+			}
+			else if(i<signature.sensorData().stereoCameraModels().size())
+			{
+				model = signature.sensorData().stereoCameraModels()[i].left();
+			}
+			if(model.isValidForProjection())
+			{
+				Transform t = model.localTransform().inverse() * iter->second.transform();
+				cv::Vec3d rvec, tvec;
+				tvec.val[0] = t.x();
+				tvec.val[1] = t.y();
+				tvec.val[2] = t.z();
 
-			//cv::aruco::drawAxis(image, model.K(), model.D(), rvec, tvec, _preferencesDialog->getMarkerLength()<=0?0.1:_preferencesDialog->getMarkerLength() * 0.5f);
+				// In front of the camera?
+				if(t.z() > 0)
+				{
+					cv::Mat R;
+					t.rotationMatrix().convertTo(R, CV_64F);
+					cv::Rodrigues(R, rvec);
 
-			// project axis points
-			std::vector< cv::Point3f > axisPoints;
-			float length = _preferencesDialog->getMarkerLength()<=0?0.1:_preferencesDialog->getMarkerLength() * 0.5f;
-			axisPoints.push_back(cv::Point3f(0, 0, 0));
-			axisPoints.push_back(cv::Point3f(length, 0, 0));
-			axisPoints.push_back(cv::Point3f(0, length, 0));
-			axisPoints.push_back(cv::Point3f(0, 0, length));
-			std::vector< cv::Point2f > imagePoints;
-			projectPoints(axisPoints, rvec, tvec, model.K(), model.D(), imagePoints);
-			// draw axis lines
-			cv::line(image, imagePoints[0], imagePoints[1], cv::Scalar(0, 0, 255), 3);
-			cv::line(image, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 3);
-			cv::line(image, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 3);
-			cv::putText(image, uNumber2Str(-iter->first), imagePoints[0], cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 255, 255), 2);
+					//cv::aruco::drawAxis(image, model.K(), model.D(), rvec, tvec, _preferencesDialog->getMarkerLength()<=0?0.1:_preferencesDialog->getMarkerLength() * 0.5f);
+
+					// project axis points
+					std::vector< cv::Point3f > axisPoints;
+					float length = _preferencesDialog->getMarkerLength()<=0?0.1:_preferencesDialog->getMarkerLength() * 0.5f;
+					axisPoints.push_back(cv::Point3f(0, 0, 0));
+					axisPoints.push_back(cv::Point3f(length, 0, 0));
+					axisPoints.push_back(cv::Point3f(0, length, 0));
+					axisPoints.push_back(cv::Point3f(0, 0, length));
+					std::vector< cv::Point2f > imagePoints;
+					projectPoints(axisPoints, rvec, tvec, model.K(), model.D(), imagePoints);
+
+					//offset x based on camera index
+					bool valid = true;
+					if(i!=0)
+					{
+						if(model.imageWidth() <= 0)
+						{
+							valid = false;
+							UWARN("Cannot draw correctly landmark %d with provided camera model %d (missing image width)", -iter->first, (int)i);
+						}
+						else
+						{
+							for(int j=0; j<4; ++j)
+							{
+								imagePoints[j].x += i*model.imageWidth();
+							}
+						}
+					}
+					if(valid)
+					{
+						// draw axis lines
+						cv::line(image, imagePoints[0], imagePoints[1], cv::Scalar(0, 0, 255), 3);
+						cv::line(image, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 3);
+						cv::line(image, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 3);
+						cv::putText(image, uNumber2Str(-iter->first), imagePoints[0], cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(0, 255, 255), 2);
+					}
+				}
+			}
 		}
 	}
 }
@@ -5038,7 +5190,8 @@ void MainWindow::updateSelectSourceMenu()
 	_ui->actionStereoUsb->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoUsb);
 	_ui->actionRealSense2_T265->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoRealSense2);
 	_ui->actionMYNT_EYE_S_SDK->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoMyntEye);
-	_ui->actionDepthAI->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoDepthAI);
+	_ui->actionDepthAI_oakd->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoDepthAI);
+	_ui->actionDepthAI_oakdlite->setChecked(_preferencesDialog->getSourceDriver() == PreferencesDialog::kSrcStereoDepthAI);
 }
 
 void MainWindow::changeImgRateSetting()
@@ -5065,7 +5218,7 @@ QString MainWindow::captureScreen(bool cacheInRAM, bool png)
 {
 	QString name = (QDateTime::currentDateTime().toString("yyMMddhhmmsszzz") + (png?".png":".jpg"));
 	_ui->statusbar->clearMessage();
-	QPixmap figure = QPixmap::grabWidget(this);
+	QPixmap figure = this->grab();
 
 	QString targetDir = _preferencesDialog->getWorkingDirectory() + QDir::separator() + "ScreensCaptured";
 	QString msg;
@@ -5177,6 +5330,8 @@ void MainWindow::newDatabase()
 	_cloudViewer->removeLine("odom_to_base_link");
 	_cloudViewer->removeCoordinate("odom_frame");
 	_cloudViewer->removeCoordinate("map_frame");
+	_cloudViewer->removeText("map_frame_label");
+	_cloudViewer->removeText("odom_frame_label");
 	ULOGGER_DEBUG("");
 	this->clearTheCache();
 	std::string databasePath = (_preferencesDialog->getWorkingDirectory()+QDir::separator()+QString("rtabmap.tmp.db")).toStdString();
@@ -5326,8 +5481,9 @@ void MainWindow::openDatabase(const QString & path, const ParametersMap & overri
 						if(different)
 						{
 							differentParameters.insert(*iter);
-							QString msg = tr("Parameter \"%1\": database=\"%2\" Preferences=\"%3\"")
+							QString msg = tr("Parameter \"%1\": %2=\"%3\" Preferences=\"%4\"")
 											.arg(iter->first.c_str())
+											.arg(overridedParameters.find(iter->first) != overridedParameters.end()?"Arguments":"Database")
 											.arg(iter->second.c_str())
 											.arg(jter->second.c_str());
 							_ui->widget_console->appendMsg(msg);
@@ -5340,9 +5496,11 @@ void MainWindow::openDatabase(const QString & path, const ParametersMap & overri
 				{
 					int r = QMessageBox::question(this,
 							tr("Update parameters..."),
-							tr("The database is using %1 different parameter(s) than "
+							tr("The %1 using %2 different parameter(s) than "
 							   "those currently set in Preferences. Do you want "
-							   "to use database's parameters?").arg(differentParameters.size()),
+							   "to use those parameters?")
+							   .arg(overridedParameters.empty()?tr("database is"):tr("database and input arguments are"))
+							   .arg(differentParameters.size()),
 							QMessageBox::Yes | QMessageBox::No,
 							QMessageBox::Yes);
 					if(r == QMessageBox::Yes)
@@ -6908,9 +7066,14 @@ void MainWindow::selectMyntEyeS()
 	_preferencesDialog->selectSourceDriver(PreferencesDialog::kSrcStereoMyntEye);
 }
 
-void MainWindow::selectDepthAI()
+void MainWindow::selectDepthAIOAKD()
 {
-	_preferencesDialog->selectSourceDriver(PreferencesDialog::kSrcStereoDepthAI);
+	_preferencesDialog->selectSourceDriver(PreferencesDialog::kSrcStereoDepthAI, 1); // variant 1=IMU
+}
+
+void MainWindow::selectDepthAIOAKDLite()
+{
+	_preferencesDialog->selectSourceDriver(PreferencesDialog::kSrcStereoDepthAI, 0); // variant 0=no IMU
 }
 
 void MainWindow::dumpTheMemory()
@@ -6955,6 +7118,14 @@ void MainWindow::sendWaypoints()
 			_waypointsIndex = 0;
 			this->postGoal(_waypoints.at(_waypointsIndex));
 		}
+	}
+}
+
+void MainWindow::postGoal()
+{
+	if(!_waypoints.isEmpty())
+	{
+		postGoal(_waypoints.at(_waypointsIndex % _waypoints.size()));
 	}
 }
 

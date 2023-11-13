@@ -129,6 +129,13 @@ public:
 			break;
 		}
 		_pose=pose;
+		float r,p,yaw;
+		_pose.getEulerAngles(r, p, yaw);
+		if(_line)
+		{
+			float radius = this->rect().width()/2.0f;
+			_line->setLine(0,0,-radius*sin(yaw),-radius*cos(yaw));
+		}
 	}
 
 protected:
@@ -624,7 +631,14 @@ void GraphViewer::updateGraph(const std::map<int, Transform> & poses,
 				}
 				else if(iter->second.type() == Link::kUserClosure)
 				{
-					linkItem->setColor(_loopClosureUserColor);
+					if(_intraInterSessionColors)
+					{
+						linkItem->setColor(interSessionClosure?_loopInterSessionColor:_loopIntraSessionColor);
+					}
+					else
+					{
+						linkItem->setColor(_loopClosureUserColor);
+					}
 				}
 				else if(iter->second.type() == Link::kLandmark)
 				{
@@ -707,7 +721,7 @@ void GraphViewer::updateGraph(const std::map<int, Transform> & poses,
 
 	if(_nodeItems.size())
 	{
-		(--_nodeItems.end()).value()->setColor(Qt::green);
+		(--_nodeItems.end()).value()->setColor(_nodeOdomCacheColor);
 	}
 
 	this->scene()->setSceneRect(this->scene()->itemsBoundingRect());  // Re-shrink the scene to it's bounding contents
@@ -1063,10 +1077,6 @@ void GraphViewer::updatePosterior(const std::map<int, float> & posterior, float 
 				float v = jter->second>max?max:jter->second;
 				iter.value()->setColor(QColor::fromHsvF((1-v/max)*240.0f/360.0f, 1, 1, 1)); //0=red 240=blue
 				iter.value()->setZValue(iter.value()->zValue()+zValueOffset);
-			}
-			else if(iter.key() > 0)
-			{
-				iter.value()->setColor(QColor::fromHsvF(240.0f/360.0f, 1, 1, 1)); // blue
 			}
 		}
 	}
@@ -1591,7 +1601,8 @@ void GraphViewer::setIntraSessionLoopColor(const QColor & color)
 		{
 			if((iter.value()->linkType() == Link::kGlobalClosure ||
 				iter.value()->linkType() == Link::kLocalSpaceClosure ||
-				iter.value()->linkType() == Link::kLocalTimeClosure) &&
+				iter.value()->linkType() == Link::kLocalTimeClosure ||
+				iter.value()->linkType() == Link::kUserClosure) &&
 				!iter.value()->isInterSession())
 			{
 				iter.value()->setColor(_loopIntraSessionColor);
@@ -1609,7 +1620,8 @@ void GraphViewer::setInterSessionLoopColor(const QColor & color)
 		{
 			if((iter.value()->linkType() == Link::kGlobalClosure ||
 				iter.value()->linkType() == Link::kLocalSpaceClosure ||
-				iter.value()->linkType() == Link::kLocalTimeClosure) &&
+				iter.value()->linkType() == Link::kLocalTimeClosure ||
+				iter.value()->linkType() == Link::kUserClosure) &&
 				iter.value()->isInterSession())
 			{
 				iter.value()->setColor(_loopInterSessionColor);
@@ -1631,6 +1643,7 @@ void GraphViewer::setIntraInterSessionColorsEnabled(bool enabled)
 	{
 		this->setGlobalLoopClosureColor(_loopClosureColor);
 		this->setLocalLoopClosureColor(_loopClosureLocalColor);
+		this->setUserLoopClosureColor(_loopClosureUserColor);
 	}
 }
 
@@ -1698,16 +1711,9 @@ void GraphViewer::setOrientationENU(bool enabled)
 		_orientationENU = enabled;
 		this->rotate(_orientationENU?90:270);
 	}
-	if(_orientationENU)
-	{
-		QTransform t;
-		t.rotateRadians(_worldMapRotation);
-		_root->setTransform(t);
-	}
-	else
-	{
-		_root->resetTransform();
-	}
+	QTransform t;
+	t.rotateRadians(_worldMapRotation);
+	_root->setTransform(t);
 	if(_nodeItems.size() || _linkItems.size())
 	{
 		this->scene()->setSceneRect(this->scene()->itemsBoundingRect());  // Re-shrink the scene to it's bounding contents
@@ -1771,7 +1777,7 @@ void GraphViewer::restoreDefaults()
 
 void GraphViewer::wheelEvent ( QWheelEvent * event )
 {
-	if(event->delta() < 0)
+	if(event->angleDelta().y() < 0)
 	{
 		this->scale(0.95, 0.95);
 	}
@@ -2033,7 +2039,7 @@ void GraphViewer::contextMenuEvent(QContextMenuEvent * event)
 				if(QFileInfo(filePath).suffix().compare("pdf") == 0)
 				{
 					QPrinter printer(QPrinter::HighResolution);
-					printer.setOrientation(QPrinter::Portrait);
+					printer.setPageOrientation(QPageLayout::Portrait);
 					printer.setOutputFileName( filePath );
 					QPainter p(&printer);
 					scene()->render(&p);

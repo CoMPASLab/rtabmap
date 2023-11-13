@@ -31,7 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QInputDialog>
-#include <QDesktopWidget>
 #include <QColorDialog>
 #include <QGraphicsLineItem>
 #include <QtGui/QCloseEvent>
@@ -373,7 +372,7 @@ DatabaseViewer::DatabaseViewer(const QString & ini, QWidget * parent) :
 	connect(ui_->horizontalSlider_iterations, SIGNAL(valueChanged(int)), this, SLOT(sliderIterationsValueChanged(int)));
 	connect(ui_->horizontalSlider_iterations, SIGNAL(sliderMoved(int)), this, SLOT(sliderIterationsValueChanged(int)));
 	connect(ui_->spinBox_optimizationsFrom, SIGNAL(editingFinished()), this, SLOT(updateGraphView()));
-	connect(ui_->checkBox_iterativeOptimization, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
+	connect(ui_->comboBox_optimizationFlavor, SIGNAL(activated(int)), this, SLOT(updateGraphView()));
 	connect(ui_->checkBox_spanAllMaps, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
 	connect(ui_->checkBox_wmState, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
 	connect(ui_->graphViewer, SIGNAL(mapShownRequested()), this, SLOT(updateGraphView()));
@@ -413,6 +412,7 @@ DatabaseViewer::DatabaseViewer(const QString & ini, QWidget * parent) :
 	connect(ui_->graphicsView_B, SIGNAL(configChanged()), this, SLOT(configModified()));
 	connect(ui_->comboBox_logger_level, SIGNAL(currentIndexChanged(int)), this, SLOT(configModified()));
 	connect(ui_->actionVertical_Layout, SIGNAL(toggled(bool)), this, SLOT(configModified()));
+	connect(ui_->checkBox_alignPosesWithGPS, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
 	connect(ui_->checkBox_alignPosesWithGroundTruth, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
 	connect(ui_->checkBox_alignScansCloudsWithGroundTruth, SIGNAL(stateChanged(int)), this, SLOT(updateGraphView()));
 	connect(ui_->checkBox_ignoreIntermediateNodes, SIGNAL(stateChanged(int)), this, SLOT(configModified()));
@@ -428,6 +428,8 @@ DatabaseViewer::DatabaseViewer(const QString & ini, QWidget * parent) :
 	connect(ui_->groupBox_posefiltering, SIGNAL(clicked(bool)), this, SLOT(configModified()));
 	connect(ui_->doubleSpinBox_posefilteringRadius, SIGNAL(valueChanged(double)), this, SLOT(configModified()));
 	connect(ui_->doubleSpinBox_posefilteringAngle, SIGNAL(valueChanged(double)), this, SLOT(configModified()));
+	connect(ui_->horizontalSlider_rotation, SIGNAL(valueChanged(int)), this, SLOT(updateGraphRotation()));
+	connect(ui_->pushButton_applyRotation, SIGNAL(clicked()), this, SLOT(updateGraphView()));
 
 	connect(ui_->spinBox_icp_decimation, SIGNAL(valueChanged(int)), this, SLOT(configModified()));
 	connect(ui_->doubleSpinBox_icp_maxDepth, SIGNAL(valueChanged(double)), this, SLOT(configModified()));
@@ -716,12 +718,13 @@ void DatabaseViewer::restoreDefaultSettings()
 {
 	// reset GUI parameters
 	ui_->comboBox_logger_level->setCurrentIndex(1);
+	ui_->checkBox_alignPosesWithGPS->setChecked(true);
 	ui_->checkBox_alignPosesWithGroundTruth->setChecked(true);
 	ui_->checkBox_alignScansCloudsWithGroundTruth->setChecked(false);
 	ui_->checkBox_ignoreIntermediateNodes->setChecked(false);
 	ui_->checkBox_timeStats->setChecked(true);
 
-	ui_->checkBox_iterativeOptimization->setChecked(true);
+	ui_->comboBox_optimizationFlavor->setCurrentIndex(0);
 	ui_->checkBox_spanAllMaps->setChecked(true);
 	ui_->checkBox_wmState->setChecked(false);
 	ui_->checkBox_ignorePoseCorrection->setChecked(false);
@@ -1069,6 +1072,7 @@ bool DatabaseViewer::closeDatabase()
 		ui_->checkBox_showOptimized->setEnabled(false);
 		ui_->toolBox_statistics->clear();
 		databaseFileName_.clear();
+		ui_->checkBox_alignPosesWithGPS->setVisible(false);
 		ui_->checkBox_alignPosesWithGroundTruth->setVisible(false);
 		ui_->checkBox_alignScansCloudsWithGroundTruth->setVisible(false);
 		ui_->doubleSpinBox_optimizationScale->setVisible(false);
@@ -1077,6 +1081,7 @@ bool DatabaseViewer::closeDatabase()
 		ui_->label_rmse_title->setVisible(false);
 		ui_->checkBox_ignoreIntermediateNodes->setVisible(false);
 		ui_->label_ignoreINtermediateNdoes->setVisible(false);
+		ui_->label_alignPosesWithGPS->setVisible(false);
 		ui_->label_alignPosesWithGroundTruth->setVisible(false);
 		ui_->label_alignScansCloudsWithGroundTruth->setVisible(false);
 		ui_->label_optimizeFrom->setText(tr("Root"));
@@ -1683,7 +1688,11 @@ void DatabaseViewer::updateIds()
 	UINFO("Loading all IDs...");
 	std::set<int> ids;
 	dbDriver_->getAllNodeIds(ids);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	ids_ = QList<int>(ids.begin(), ids.end());
+#else
 	ids_ = QList<int>::fromStdList(std::list<int>(ids.begin(), ids.end()));
+#endif
 	lastWmIds_.clear();
 	dbDriver_->getLastNodeIds(lastWmIds_);
 	idToIndex_.clear();
@@ -1696,6 +1705,7 @@ void DatabaseViewer::updateIds()
 	gpsValues_.clear();
 	lastSliderIndexBrowsed_ = 0;
 	ui_->checkBox_wmState->setVisible(false);
+	ui_->checkBox_alignPosesWithGPS->setVisible(false);
 	ui_->checkBox_alignPosesWithGroundTruth->setVisible(false);
 	ui_->checkBox_alignScansCloudsWithGroundTruth->setVisible(false);
 	ui_->doubleSpinBox_optimizationScale->setVisible(false);
@@ -1704,6 +1714,7 @@ void DatabaseViewer::updateIds()
 	ui_->label_rmse_title->setVisible(false);
 	ui_->checkBox_ignoreIntermediateNodes->setVisible(false);
 	ui_->label_ignoreINtermediateNdoes->setVisible(false);
+	ui_->label_alignPosesWithGPS->setVisible(false);
 	ui_->label_alignPosesWithGroundTruth->setVisible(false);
 	ui_->label_alignScansCloudsWithGroundTruth->setVisible(false);
 	ui_->menuEdit->setEnabled(true);
@@ -1830,7 +1841,6 @@ void DatabaseViewer::updateIds()
 		previousPose=p;
 
 		//links
-		bool addPose = links.find(ids_[i]) == links.end();
 		for(std::multimap<int, Link>::iterator jter=links.find(ids_[i]); jter!=links.end() && jter->first == ids_[i]; ++jter)
 		{
 			if(jter->second.type() == Link::kNeighborMerged)
@@ -1856,34 +1866,27 @@ void DatabaseViewer::updateIds()
 				{
 					links_.insert(std::make_pair(ids_[i], jter->second));
 				}
-				addPose = true;
-			}
-			else if(graph::findLink(links_, jter->second.from(), jter->second.to()) != links_.end())
-			{
-				addPose = true;
 			}
 		}
-		if(addPose)
+		// Add pose
+		odomPoses_.insert(std::make_pair(ids_[i], p));
+		if(!g.isNull())
 		{
-			odomPoses_.insert(std::make_pair(ids_[i], p));
-			if(!g.isNull())
-			{
-				groundTruthPoses_.insert(std::make_pair(ids_[i], g));
-			}
-			if(gps.stamp() > 0.0)
-			{
-				gpsValues_.insert(std::make_pair(ids_[i], gps));
+			groundTruthPoses_.insert(std::make_pair(ids_[i], g));
+		}
+		if(gps.stamp() > 0.0)
+		{
+			gpsValues_.insert(std::make_pair(ids_[i], gps));
 
-				cv::Point3f p(0.0f,0.0f,0.0f);
-				if(!gpsPoses_.empty())
-				{
-					GeodeticCoords coords = gps.toGeodeticCoords();
-					GPS originGPS = gpsValues_.begin()->second;
-					p = coords.toENU_WGS84(originGPS.toGeodeticCoords());
-				}
-				Transform pose(p.x, p.y, p.z, 0.0f, 0.0f, (float)((-(gps.bearing()-90))*M_PI/180.0));
-				gpsPoses_.insert(std::make_pair(ids_[i], pose));
+			cv::Point3f p(0.0f,0.0f,0.0f);
+			if(!gpsPoses_.empty())
+			{
+				GeodeticCoords coords = gps.toGeodeticCoords();
+				GPS originGPS = gpsValues_.begin()->second;
+				p = coords.toENU_WGS84(originGPS.toGeodeticCoords());
 			}
+			Transform pose(p.x, p.y, p.z, 0.0f, 0.0f, (float)((-(gps.bearing()-90))*M_PI/180.0));
+			gpsPoses_.insert(std::make_pair(ids_[i], pose));
 		}
 	}
 
@@ -1894,26 +1897,18 @@ void DatabaseViewer::updateIds()
 	uSleep(100);
 	QApplication::processEvents();
 
-	if(!groundTruthPoses_.empty() || !gpsPoses_.empty())
-	{
-		ui_->checkBox_alignPosesWithGroundTruth->setVisible(true);
-		ui_->doubleSpinBox_optimizationScale->setVisible(true);
-		ui_->label_scale_title->setVisible(true);
-		ui_->label_rmse->setVisible(true);
-		ui_->label_rmse_title->setVisible(true);
-		ui_->label_alignPosesWithGroundTruth->setVisible(true);
+	ui_->doubleSpinBox_optimizationScale->setVisible(!groundTruthPoses_.empty());
+	ui_->label_scale_title->setVisible(!groundTruthPoses_.empty());
+	ui_->label_rmse->setVisible(!groundTruthPoses_.empty());
+	ui_->label_rmse_title->setVisible(!groundTruthPoses_.empty());
 
-		if(!groundTruthPoses_.empty())
-		{
-			ui_->label_alignPosesWithGroundTruth->setText(tr("Align poses with ground truth"));
-			ui_->checkBox_alignScansCloudsWithGroundTruth->setVisible(true);
-			ui_->label_alignScansCloudsWithGroundTruth->setVisible(true);
-		}
-		else
-		{
-			ui_->label_alignPosesWithGroundTruth->setText(tr("Align poses with GPS"));
-		}
-	}
+	ui_->checkBox_alignPosesWithGPS->setVisible(!gpsPoses_.empty());
+	ui_->label_alignPosesWithGPS->setVisible(!gpsPoses_.empty());
+	ui_->checkBox_alignPosesWithGroundTruth->setVisible(!groundTruthPoses_.empty());
+	ui_->label_alignPosesWithGroundTruth->setVisible(!groundTruthPoses_.empty());
+	ui_->checkBox_alignScansCloudsWithGroundTruth->setVisible(!groundTruthPoses_.empty());
+	ui_->label_alignScansCloudsWithGroundTruth->setVisible(!groundTruthPoses_.empty());
+
 	if(!gpsValues_.empty())
 	{
 		ui_->menuExport_GPS->setEnabled(true);
@@ -2228,10 +2223,18 @@ void DatabaseViewer::updateInfo()
 			ui_->textEdit_info->append("");
 			ParametersMap parameters = dbDriver_->getLastParameters();
 			QFontMetrics metrics(ui_->textEdit_info->font());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+			int tabW = ui_->textEdit_info->tabStopDistance();
+#else
 			int tabW = ui_->textEdit_info->tabStopWidth();
+#endif
 			for(ParametersMap::iterator iter=parameters.begin(); iter!=parameters.end(); ++iter)
 			{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+				int strW = metrics.horizontalAdvance(QString(iter->first.c_str()) + "=");
+#else
 				int strW = metrics.width(QString(iter->first.c_str()) + "=");
+#endif
 				ui_->textEdit_info->append(tr("%1=%2%3")
 						.arg(iter->first.c_str())
 						.arg(strW < tabW?"\t\t\t\t":strW < tabW*2?"\t\t\t":strW < tabW*3?"\t\t":"\t")
@@ -2548,10 +2551,11 @@ void DatabaseViewer::exportPoses(int format)
 			optimizedPoses = uValueAt(graphes_, ui_->horizontalSlider_iterations->value());
 		}
 
-		if(ui_->checkBox_alignPosesWithGroundTruth->isChecked())
+		if(ui_->checkBox_alignPosesWithGPS->isChecked() ||
+		   ui_->checkBox_alignPosesWithGroundTruth->isChecked())
 		{
 			std::map<int, Transform> refPoses = groundTruthPoses_;
-			if(refPoses.empty())
+			if(ui_->checkBox_alignPosesWithGPS->isChecked())
 			{
 				refPoses = gpsPoses_;
 			}
@@ -2588,7 +2592,7 @@ void DatabaseViewer::exportPoses(int format)
 						rotational_min,
 						rotational_max);
 
-				if(ui_->checkBox_alignPosesWithGroundTruth->isChecked() && !gtToMap.isIdentity())
+				if(!gtToMap.isIdentity())
 				{
 					for(std::map<int, Transform>::iterator iter=optimizedPoses.begin(); iter!=optimizedPoses.end(); ++iter)
 					{
@@ -3141,7 +3145,26 @@ void DatabaseViewer::exportSaved2DMap()
 				path += ".pgm";
 			}
 			cv::imwrite(path.toStdString(), map8U);
-			QMessageBox::information(this, tr("Export 2D map"), tr("Exported %1!").arg(path));
+
+			QFileInfo info(path);
+			QString yaml = info.absolutePath() + "/" +  info.baseName() + ".yaml";
+
+			float occupancyThr = Parameters::defaultGridGlobalOccupancyThr();
+			Parameters::parse(ui_->parameters_toolbox->getParameters(), Parameters::kGridGlobalOccupancyThr(), occupancyThr);
+
+			std::ofstream file;
+			file.open (yaml.toStdString());
+			file << "image: " << info.baseName().toStdString() << ".pgm" << std::endl;
+			file << "resolution: " << cellSize << std::endl;
+			file << "origin: [" << xMin << ", " << yMin << ", 0.0]" << std::endl;
+			file << "negate: 0" << std::endl;
+			file << "occupied_thresh: " << occupancyThr << std::endl;
+			file << "free_thresh: 0.196" << std::endl;
+			file << std::endl;
+			file.close();
+
+
+			QMessageBox::information(this, tr("Export 2D map"), tr("Exported %1 and %2!").arg(path).arg(yaml));
 		}
 	}
 }
@@ -3234,17 +3257,57 @@ void DatabaseViewer::regenerateSavedMap()
 		return;
 	}
 
+	//
+#ifdef RTABMAP_OCTOMAP
+	QStringList types;
+	types.push_back("Default occupancy grid");
+	types.push_back("From OctoMap projection");
+	bool ok;
+	QString type = QInputDialog::getItem(this, tr("Which type?"), tr("Type:"), types, 0, false, &ok);
+	if(!ok)
+	{
+		return;
+	}
+#endif
 
 	//update scans
 	UINFO("Update local maps list...");
-	OccupancyGrid grid(ui_->parameters_toolbox->getParameters());
-	for(std::map<int, std::pair<std::pair<cv::Mat, cv::Mat>, cv::Mat> >::iterator iter=localMaps_.begin(); iter!=localMaps_.end(); ++iter)
-	{
-		grid.addToCache(iter->first, iter->second.first.first, iter->second.first.second, iter->second.second);
-	}
-	grid.update(graphes_.back());
 	float xMin, yMin;
-	cv::Mat map = grid.getMap(xMin, yMin);
+	cv::Mat map;
+	float gridCellSize = Parameters::defaultGridCellSize();
+	Parameters::parse(ui_->parameters_toolbox->getParameters(), Parameters::kGridCellSize(), gridCellSize);
+#ifdef RTABMAP_OCTOMAP
+	if(type.compare("From OctoMap projection") == 0)
+	{
+		//create local octomap
+		OctoMap octomap(ui_->parameters_toolbox->getParameters());
+		for(std::map<int, std::pair<std::pair<cv::Mat, cv::Mat>, cv::Mat> >::iterator iter=localMaps_.begin(); iter!=localMaps_.end(); ++iter)
+		{
+			if(iter->second.first.first.channels() == 2 || iter->second.first.second.channels() == 2)
+			{
+				QMessageBox::warning(this, tr(""),
+						tr("Some local occupancy grids are 2D, but OctoMap requires 3D local "
+							"occupancy grids. Select default occupancy grid or generate "
+							"3D local occupancy grids (\"Grid/3D\" core parameter)."));
+				return;
+			}
+			octomap.addToCache(iter->first, iter->second.first.first, iter->second.first.second, iter->second.second, localMapsInfo_.at(iter->first).second);
+		}
+
+		octomap.update(graphes_.back());
+		map = octomap.createProjectionMap(xMin, yMin, gridCellSize, 0);
+	}
+	else
+#endif
+	{
+		OccupancyGrid grid(ui_->parameters_toolbox->getParameters());
+		for(std::map<int, std::pair<std::pair<cv::Mat, cv::Mat>, cv::Mat> >::iterator iter=localMaps_.begin(); iter!=localMaps_.end(); ++iter)
+		{
+			grid.addToCache(iter->first, iter->second.first.first, iter->second.first.second, iter->second.second);
+		}
+		grid.update(graphes_.back());
+		map = grid.getMap(xMin, yMin);
+	}
 
 	if(map.empty())
 	{
@@ -3252,7 +3315,7 @@ void DatabaseViewer::regenerateSavedMap()
 	}
 	else
 	{
-		dbDriver_->save2DMap(map, xMin, yMin, grid.getCellSize());
+		dbDriver_->save2DMap(map, xMin, yMin, gridCellSize);
 		Transform lastlocalizationPose;
 		dbDriver_->loadOptimizedPoses(&lastlocalizationPose);
 		if(lastlocalizationPose.isNull() && !graphes_.back().empty())
@@ -3836,7 +3899,11 @@ void DatabaseViewer::regenerateCurrentLocalMaps()
 	QSet<int> idsSet;
 	idsSet.insert(ids_.at(ui_->horizontalSlider_A->value()));
 	idsSet.insert(ids_.at(ui_->horizontalSlider_B->value()));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+	QList<int> ids(idsSet.begin(), idsSet.end());
+#else
 	QList<int> ids = idsSet.toList();
+#endif
 
 	rtabmap::ProgressDialog progressDialog(this);
 	progressDialog.setMaximumSteps(ids.size());
@@ -4332,9 +4399,15 @@ void DatabaseViewer::refineAllLinks(const QList<Link> & links)
 		{
 			int from = links[i].from();
 			int to = links[i].to();
-			this->refineConstraint(links[i].from(), links[i].to(), true);
-
-			progressDialog->appendText(tr("Refined link %1->%2 (%3/%4)").arg(from).arg(to).arg(i+1).arg(links.size()));
+			if(from > 0 && to > 0)
+			{
+				this->refineConstraint(links[i].from(), links[i].to(), true);
+				progressDialog->appendText(tr("Refined link %1->%2 (%3/%4)").arg(from).arg(to).arg(i+1).arg(links.size()));
+			}
+			else
+			{
+				progressDialog->appendText(tr("Ignored link %1->%2 (landmark)").arg(from).arg(to));
+			}
 			progressDialog->incrementStep();
 			QApplication::processEvents();
 			if(progressDialog->isCanceled())
@@ -4381,10 +4454,12 @@ void DatabaseViewer::sliderAValueChanged(int value)
 			ui_->label_idA,
 			ui_->label_mapA,
 			ui_->label_poseA,
+			ui_->label_optposeA,
 			ui_->label_velA,
 			ui_->label_calibA,
 			ui_->label_scanA,
 			ui_->label_gravityA,
+			ui_->label_priorA,
 			ui_->label_gpsA,
 			ui_->label_gtA,
 			ui_->label_sensorsA,
@@ -4404,10 +4479,12 @@ void DatabaseViewer::sliderBValueChanged(int value)
 			ui_->label_idB,
 			ui_->label_mapB,
 			ui_->label_poseB,
+			ui_->label_optposeB,
 			ui_->label_velB,
 			ui_->label_calibB,
 			ui_->label_scanB,
 			ui_->label_gravityB,
+			ui_->label_priorB,
 			ui_->label_gpsB,
 			ui_->label_gtB,
 			ui_->label_sensorsB,
@@ -4425,10 +4502,12 @@ void DatabaseViewer::update(int value,
 						QLabel * labelId,
 						QLabel * labelMapId,
 						QLabel * labelPose,
+						QLabel * labelOptPose,
 						QLabel * labelVelocity,
 						QLabel * labelCalib,
 						QLabel * labelScan,
 						QLabel * labelGravity,
+						QLabel * labelPrior,
 						QLabel * labelGps,
 						QLabel * labelGt,
 						QLabel * labelSensors,
@@ -4444,11 +4523,13 @@ void DatabaseViewer::update(int value,
 	label->clear();
 	labelMapId->clear();
 	labelPose->clear();
+	labelOptPose->clear();
 	labelVelocity->clear();
 	stamp->clear();
 	labelCalib->clear();
 	labelScan ->clear();
 	labelGravity->clear();
+	labelPrior->clear();
 	labelGps->clear();
 	labelGt->clear();
 	labelSensors->clear();
@@ -4553,9 +4634,17 @@ void DatabaseViewer::update(int value,
 				float x,y,z,roll,pitch,yaw;
 				odomPose.getTranslationAndEulerAngles(x,y,z,roll, pitch,yaw);
 				labelPose->setText(QString("%1xyz=(%2,%3,%4)\nrpy=(%5,%6,%7)").arg(odomPose.isIdentity()?"* ":"").arg(x).arg(y).arg(z).arg(roll).arg(pitch).arg(yaw));
-				if(odomPoses_.size() && odomPoses_.find(id) == odomPoses_.end())
+				if(graphes_.size())
 				{
-					labelPose->setText(labelPose->text() + "\n<Not in graph>");
+					if(graphes_.back().find(id) == graphes_.back().end())
+					{
+						labelOptPose->setText("<Not in optimized graph>");
+					}
+					else
+					{
+						graphes_.back().find(id)->second.getTranslationAndEulerAngles(x,y,z,roll, pitch,yaw);
+						labelOptPose->setText(QString("xyz=(%1,%2,%3)\nrpy=(%4,%5,%6)").arg(x).arg(y).arg(z).arg(roll).arg(pitch).arg(yaw));
+					}
 				}
 				if(s!=0.0)
 				{
@@ -4576,6 +4665,17 @@ void DatabaseViewer::update(int value,
 					Eigen::Vector3d v = Transform(0,0,0,roll,pitch,0).toEigen3d() * -Eigen::Vector3d::UnitZ();
 					labelGravity->setText(QString("x=%1 y=%2 z=%3").arg(v[0]).arg(v[1]).arg(v[2]));
 					labelGravity->setToolTip(QString("roll=%1 pitch=%2 yaw=%3").arg(roll).arg(pitch).arg(yaw));
+				}
+
+				std::multimap<int, Link> priorLink;
+				dbDriver_->loadLinks(id, priorLink, Link::kPosePrior);
+				if(!priorLink.empty())
+				{
+					priorLink.begin()->second.transform().getTranslationAndEulerAngles(x,y,z,roll, pitch,yaw);
+					labelPrior->setText(QString("xyz=(%1,%2,%3)\nrpy=(%4,%5,%6)").arg(x).arg(y).arg(z).arg(roll).arg(pitch).arg(yaw));
+					std::stringstream out;
+					out << priorLink.begin()->second.infMatrix().inv();
+					labelPrior->setToolTip(QString("%1").arg(out.str().c_str()));
 				}
 
 				if(gps.stamp()>0.0)
@@ -5609,28 +5709,21 @@ void DatabaseViewer::updateWordsMatching(const std::vector<int> & inliers)
 					float scaleAX = ui_->graphicsView_A->viewScale();
 					float scaleBX = ui_->graphicsView_B->viewScale();
 
-					float scaleDiff = ui_->graphicsView_A->viewScale() / ui_->graphicsView_B->viewScale();
-					float deltaAX = 0;
-					float deltaAY = 0;
+					float marginAX = (ui_->graphicsView_A->width()   - ui_->graphicsView_A->sceneRect().width()*scaleAX)/2.0f;
+					float marginAY = (ui_->graphicsView_A->height()  - ui_->graphicsView_A->sceneRect().height()*scaleAX)/2.0f;
+					float marginBX   = (ui_->graphicsView_B->width()   - ui_->graphicsView_B->sceneRect().width()*scaleBX)/2.0f;
+					float marginBY   = (ui_->graphicsView_B->height()  - ui_->graphicsView_B->sceneRect().height()*scaleBX)/2.0f;
+
+					float deltaX = 0;
+					float deltaY = 0;
 
 					if(ui_->actionVertical_Layout->isChecked())
 					{
-						deltaAY = ui_->graphicsView_A->height()/scaleAX;
+						deltaY = ui_->graphicsView_A->height();
 					}
 					else
 					{
-						deltaAX = ui_->graphicsView_A->width()/scaleAX;
-					}
-					float deltaBX = 0;
-					float deltaBY = 0;
-
-					if(ui_->actionVertical_Layout->isChecked())
-					{
-						deltaBY = ui_->graphicsView_B->height()/scaleBX;
-					}
-					else
-					{
-						deltaBX = ui_->graphicsView_A->width()/scaleBX;
+						deltaX = ui_->graphicsView_A->width();
 					}
 
 					const KeypointItem * kptA = wordsA.value(ids[i]);
@@ -5652,17 +5745,17 @@ void DatabaseViewer::updateWordsMatching(const std::vector<int> & inliers)
 					}
 
 					ui_->graphicsView_A->addLine(
-							kptA->rect().x()+kptA->rect().width()/2,
-							kptA->rect().y()+kptA->rect().height()/2,
-							kptB->rect().x()/scaleDiff+kptB->rect().width()/scaleDiff/2+deltaAX,
-							kptB->rect().y()/scaleDiff+kptB->rect().height()/scaleDiff/2+deltaAY,
+							kptA->keypoint().pt.x,
+							kptA->keypoint().pt.y,
+							(kptB->keypoint().pt.x*scaleBX+marginBX+deltaX-marginAX)/scaleAX,
+							(kptB->keypoint().pt.y*scaleBX+marginBY+deltaY-marginAY)/scaleAX,
 							cA);
 
 					ui_->graphicsView_B->addLine(
-							kptA->rect().x()*scaleDiff+kptA->rect().width()*scaleDiff/2-deltaBX,
-							kptA->rect().y()*scaleDiff+kptA->rect().height()*scaleDiff/2-deltaBY,
-							kptB->rect().x()+kptB->rect().width()/2,
-							kptB->rect().y()+kptB->rect().height()/2,
+							(kptA->keypoint().pt.x*scaleAX+marginAX-deltaX-marginBX)/scaleBX,
+							(kptA->keypoint().pt.y*scaleAX+marginAY-deltaY-marginBY)/scaleBX,
+							kptB->keypoint().pt.x,
+							kptB->keypoint().pt.y,
 							cB);
 				}
 			}
@@ -5981,10 +6074,12 @@ void DatabaseViewer::updateConstraintView(
 						ui_->label_idA,
 						ui_->label_mapA,
 						ui_->label_poseA,
+						ui_->label_optposeA,
 						ui_->label_velA,
 						ui_->label_calibA,
 						ui_->label_scanA,
 						ui_->label_gravityA,
+						ui_->label_priorA,
 						ui_->label_gpsA,
 						ui_->label_gtA,
 						ui_->label_sensorsA,
@@ -6002,10 +6097,12 @@ void DatabaseViewer::updateConstraintView(
 						ui_->label_idB,
 						ui_->label_mapB,
 						ui_->label_poseB,
+						ui_->label_optposeB,
 						ui_->label_velB,
 						ui_->label_calibB,
 						ui_->label_scanB,
 						ui_->label_gravityB,
+						ui_->label_priorB,
 						ui_->label_gpsB,
 						ui_->label_gtB,
 						ui_->label_sensorsB,
@@ -6526,6 +6623,17 @@ void DatabaseViewer::updateConstraintButtons()
 				ui_->pushButton_add->setEnabled(true);
 			}
 		}
+		else if(ui_->checkBox_enableForAll->isChecked())
+		{
+			if(odomPoses_.find(from) == odomPoses_.end())
+			{
+				UWARN("Button \"Add\" cannot be enabled even if \"all\" checkbox is checked, as node %d doesn't have odometry set.", from);
+			}
+			else if(odomPoses_.find(to) == odomPoses_.end())
+			{
+				UWARN("Button \"Add\" cannot be enabled even if \"all\" checkbox is checked, as node %d doesn't have odometry set.", to);
+			}
+		}
 
 		currentLink = findActiveLink(from ,to);
 	}
@@ -6557,7 +6665,7 @@ void DatabaseViewer::sliderIterationsValueChanged(int value)
 		std::map<int, rtabmap::Transform> graph = uValueAt(graphes_, value);
 
 		std::map<int, Transform> refPoses = groundTruthPoses_;
-		if(refPoses.empty())
+		if(ui_->checkBox_alignPosesWithGPS->isChecked())
 		{
 			refPoses = gpsPoses_;
 		}
@@ -6621,7 +6729,9 @@ void DatabaseViewer::sliderIterationsValueChanged(int value)
 			UINFO("rotational_min=%f", rotational_min);
 			UINFO("rotational_max=%f", rotational_max);
 
-			if(ui_->checkBox_alignPosesWithGroundTruth->isChecked() && !gtToMap.isIdentity())
+			if((ui_->checkBox_alignPosesWithGPS->isChecked() ||
+				ui_->checkBox_alignPosesWithGroundTruth->isChecked()) &&
+			   !gtToMap.isIdentity())
 			{
 				for(std::map<int, Transform>::iterator iter=graph.begin(); iter!=graph.end(); ++iter)
 				{
@@ -6674,7 +6784,7 @@ void DatabaseViewer::sliderIterationsValueChanged(int value)
 						localMapsInfo.insert(*localMapsInfo_.find(ids[i]));
 					}
 				}
-				else
+				else if(ids.at(i)>0)
 				{
 					SensorData data;
 					dbDriver_->getNodeData(ids.at(i), data, false, false, false);
@@ -6738,7 +6848,7 @@ void DatabaseViewer::sliderIterationsValueChanged(int value)
 		if(graph.size() && localMaps.size() &&
 			(ui_->graphViewer->isGridMapVisible() || ui_->dockWidget_occupancyGridView->isVisible()))
 		{
-			QTime time;
+			QElapsedTimer time;
 			time.start();
 
 #ifdef RTABMAP_OCTOMAP
@@ -7044,11 +7154,35 @@ void DatabaseViewer::sliderIterationsValueChanged(int value)
 		ui_->label_pathLength->setNum(length);
 	}
 }
+
+void DatabaseViewer::updateGraphRotation()
+{
+	if(ui_->horizontalSlider_rotation->isEnabled())
+	{
+		float theta = float(ui_->horizontalSlider_rotation->value())*M_PI/1800.0f;
+		ui_->graphViewer->setWorldMapRotation(theta);
+		ui_->label_rotation->setText(QString::number(float(-ui_->horizontalSlider_rotation->value())/10.0f, 'f', 1) + " deg");
+	}
+	else
+	{
+		ui_->graphViewer->setWorldMapRotation(0);
+	}
+}
+
 void DatabaseViewer::updateGraphView()
 {
 	ui_->label_loopClosures->clear();
 	ui_->label_poses->clear();
 	ui_->label_rmse->clear();
+
+	if(sender() == ui_->checkBox_alignPosesWithGPS && ui_->checkBox_alignPosesWithGPS->isChecked())
+	{
+		ui_->checkBox_alignPosesWithGroundTruth->setChecked(false);
+	}
+	else if(sender() == ui_->checkBox_alignPosesWithGroundTruth && ui_->checkBox_alignPosesWithGroundTruth->isChecked())
+	{
+		ui_->checkBox_alignPosesWithGPS->setChecked(false);
+	}
 
 	if(odomPoses_.size())
 	{
@@ -7150,6 +7284,49 @@ void DatabaseViewer::updateGraphView()
 			}
 		}
 
+		// Marker priors parameters
+		double markerPriorsLinearVariance = Parameters::defaultMarkerPriorsVarianceLinear();
+		double markerPriorsAngularVariance = Parameters::defaultMarkerPriorsVarianceAngular();
+		std::map<int, Transform> markerPriors;
+		ParametersMap parameters = ui_->parameters_toolbox->getParameters();
+		Parameters::parse(parameters, Parameters::kMarkerPriorsVarianceLinear(), markerPriorsLinearVariance);
+		UASSERT(markerPriorsLinearVariance>0.0f);
+		Parameters::parse(parameters, Parameters::kMarkerPriorsVarianceAngular(), markerPriorsAngularVariance);
+		UASSERT(markerPriorsAngularVariance>0.0f);
+		std::string markerPriorsStr;
+		if(Parameters::parse(parameters, Parameters::kMarkerPriors(), markerPriorsStr))
+		{
+			std::list<std::string> strList = uSplit(markerPriorsStr, '|');
+			for(std::list<std::string>::iterator iter=strList.begin(); iter!=strList.end(); ++iter)
+			{
+				std::string markerStr = *iter;
+				while(!markerStr.empty() && !uIsDigit(markerStr[0]))
+				{
+					markerStr.erase(markerStr.begin());
+				}
+				if(!markerStr.empty())
+				{
+					std::string idStr = uSplitNumChar(markerStr).front();
+					int id = uStr2Int(idStr);
+					Transform prior = Transform::fromString(markerStr.substr(idStr.size()));
+					if(!prior.isNull() && id>0)
+					{
+						markerPriors.insert(std::make_pair(-id, prior));
+						UDEBUG("Added landmark prior %d: %s", id, prior.prettyPrint().c_str());
+					}
+					else
+					{
+						UERROR("Failed to parse element \"%s\" in parameter %s", markerStr.c_str(), Parameters::kMarkerPriors().c_str());
+					}
+				}
+				else if(!iter->empty())
+				{
+					UERROR("Failed to parse parameter %s, value=\"%s\"", Parameters::kMarkerPriors().c_str(), iter->c_str());
+				}
+			}
+		}
+
+
 		// filter links
 		int totalNeighbor = 0;
 		int totalNeighborMerged = 0;
@@ -7224,6 +7401,19 @@ void DatabaseViewer::updateGraphView()
 				}
 				loopLinks_.push_back(iter->second);
 				++totalLandmarks;
+
+				// add landmark priors if there are some
+				int markerId = iter->second.to();
+				if(markerPriors.find(markerId) != markerPriors.end())
+				{
+					cv::Mat infMatrix = cv::Mat::eye(6, 6, CV_64FC1);
+					infMatrix(cv::Range(0,3), cv::Range(0,3)) /= markerPriorsLinearVariance;
+					infMatrix(cv::Range(3,6), cv::Range(3,6)) /= markerPriorsAngularVariance;
+					links.insert(std::make_pair(markerId, Link(markerId, markerId, Link::kPosePrior, markerPriors.at(markerId), infMatrix)));
+					UDEBUG("Added prior %d : %s (variance: lin=%f ang=%f)", markerId, markerPriors.at(markerId).prettyPrint().c_str(),
+							markerPriorsLinearVariance, markerPriorsAngularVariance);
+					++totalPriors;
+				}
 			}
 			else if(iter->second.type() == Link::kPosePrior)
 			{
@@ -7283,41 +7473,162 @@ void DatabaseViewer::updateGraphView()
 			}
 		}
 
-		graphes_.push_back(poses);
-
-		Optimizer * optimizer = Optimizer::create(ui_->parameters_toolbox->getParameters());
-
-		std::map<int, rtabmap::Transform> posesOut;
-		std::multimap<int, rtabmap::Link> linksOut;
-		UINFO("Get connected graph from %d (%d poses, %d links)", fromId, (int)poses.size(), (int)links.size());
-		optimizer->getConnectedGraph(
-				fromId,
-				poses,
-				links,
-				posesOut,
-				linksOut);
-		UINFO("Connected graph of %d poses and %d links", (int)posesOut.size(), (int)linksOut.size());
-		QTime time;
-		time.start();
-		std::map<int, rtabmap::Transform> finalPoses = optimizer->optimize(fromId, posesOut, linksOut, ui_->checkBox_iterativeOptimization->isChecked()?&graphes_:0);
-		ui_->label_timeOptimization->setNum(double(time.elapsed())/1000.0);
-		graphLinks_ = linksOut;
-		if(posesOut.size() && finalPoses.empty())
+		bool applyRotation = sender() == ui_->pushButton_applyRotation;
+		if(applyRotation)
 		{
-			UWARN("Optimization failed... (poses=%d, links=%d).", (int)posesOut.size(), (int)linksOut.size());
-			if(!optimizer->isCovarianceIgnored() || optimizer->type() != Optimizer::kTypeTORO)
+			float xMin, yMin, cellSize;
+			bool hasMap = !dbDriver_->load2DMap(xMin, yMin, cellSize).empty();
+			if(hasMap || !dbDriver_->loadOptimizedMesh().empty())
 			{
-				QMessageBox::warning(this, tr("Graph optimization error!"), tr("Graph optimization has failed. See the terminal for potential errors. "
-						"Give it a try with %1=0 and %2=true.").arg(Parameters::kOptimizerStrategy().c_str()).arg(Parameters::kOptimizerVarianceIgnored().c_str()));
-			}
-			else
-			{
-				QMessageBox::warning(this, tr("Graph optimization error!"), tr("Graph optimization has failed. See the terminal for potential errors."));
+				QMessageBox::StandardButton r = QMessageBox::question(this,
+					tr("Rotate Optimized Graph"),
+					tr("There is a 2D occupancy grid or mesh already saved in "
+					   "database. Applying rotation will clear them (they can be "
+					   "regenerated later from File menu options). "
+					   "Do you want to continue?"),
+					   QMessageBox::Cancel | QMessageBox::Yes,
+					   QMessageBox::Cancel);
+				if(r != QMessageBox::Yes)
+				{
+					applyRotation = false;
+				}
 			}
 		}
-		ui_->label_poses->setNum((int)finalPoses.size());
-		graphes_.push_back(finalPoses);
-		delete optimizer;
+
+		std::map<int, Transform> optPoses;
+		Transform lastLocalizationPose;
+		if(applyRotation ||
+		   ui_->comboBox_optimizationFlavor->currentIndex() == 2)
+		{
+			optPoses = dbDriver_->loadOptimizedPoses(&lastLocalizationPose);
+			if(optPoses.empty())
+			{
+				ui_->comboBox_optimizationFlavor->setCurrentIndex(0);
+				QMessageBox::warning(this, tr("Optimization Flavor"),
+						tr("There is no local optimized graph in the database, "
+						   "falling back to global iterative optimization."));
+			}
+		}
+
+		if(applyRotation ||
+		   ui_->comboBox_optimizationFlavor->currentIndex() != 2)
+		{
+			if(ui_->horizontalSlider_rotation->value()!=0 && applyRotation)
+			{
+				float theta = float(-ui_->horizontalSlider_rotation->value())*M_PI/1800.0f;
+				Transform rotT(0,0,theta);
+				poses.at(fromId) = rotT * poses.at(fromId);
+			}
+
+			graphes_.push_back(poses);
+
+			Optimizer * optimizer = Optimizer::create(parameters);
+
+			std::map<int, rtabmap::Transform> posesOut;
+			std::multimap<int, rtabmap::Link> linksOut;
+			UINFO("Get connected graph from %d (%d poses, %d links)", fromId, (int)poses.size(), (int)links.size());
+			optimizer->getConnectedGraph(
+					fromId,
+					poses,
+					links,
+					posesOut,
+					linksOut);
+			UINFO("Connected graph of %d poses and %d links", (int)posesOut.size(), (int)linksOut.size());
+			QElapsedTimer time;
+			time.start();
+			std::map<int, rtabmap::Transform> finalPoses = optimizer->optimize(fromId, posesOut, linksOut, ui_->comboBox_optimizationFlavor->currentIndex()==0?&graphes_:0);
+			ui_->label_timeOptimization->setNum(double(time.elapsed())/1000.0);
+			graphLinks_ = linksOut;
+			if(posesOut.size() && finalPoses.empty())
+			{
+				UWARN("Optimization failed... (poses=%d, links=%d).", (int)posesOut.size(), (int)linksOut.size());
+				if(!optimizer->isCovarianceIgnored() || optimizer->type() != Optimizer::kTypeTORO)
+				{
+					QMessageBox::warning(this, tr("Graph optimization error!"), tr("Graph optimization has failed. See the terminal for potential errors. "
+							"Give it a try with %1=0 and %2=true.").arg(Parameters::kOptimizerStrategy().c_str()).arg(Parameters::kOptimizerVarianceIgnored().c_str()));
+				}
+				else
+				{
+					QMessageBox::warning(this, tr("Graph optimization error!"), tr("Graph optimization has failed. See the terminal for potential errors."));
+				}
+			}
+			ui_->label_poses->setNum((int)finalPoses.size());
+			graphes_.push_back(finalPoses);
+			delete optimizer;
+
+			if(applyRotation && !finalPoses.empty())
+			{
+				ui_->comboBox_optimizationFlavor->setCurrentIndex(2);
+				graphes_.clear();
+				graphes_.push_back(finalPoses);
+				if(lastLocalizationPose.isNull())
+				{
+					// use last pose by default
+					lastLocalizationPose = finalPoses.rbegin()->second;
+				}
+				dbDriver_->saveOptimizedPoses(finalPoses, lastLocalizationPose);
+				// reset optimized mesh and map as poses have changed
+				float xMin, yMin, cellSize;
+				bool hasMap = !dbDriver_->load2DMap(xMin, yMin, cellSize).empty();
+				if(hasMap || !dbDriver_->loadOptimizedMesh().empty())
+				{
+					dbDriver_->saveOptimizedMesh(cv::Mat());
+					dbDriver_->save2DMap(cv::Mat(), 0, 0, 0);
+					QMessageBox::StandardButton r = QMessageBox::question(this,
+						tr("Rotate Optimized Graph"),
+						tr("Optimized graph has been rotated and saved back to database. "
+						   "Note that 2D occupancy grid and mesh have been cleared (if set). "
+						   "Do you want to regenerate the 2D occupancy grid now "
+						   "(can be done later from File menu)?"),
+						   QMessageBox::Ignore | QMessageBox::Yes,
+						   QMessageBox::Yes);
+					ui_->actionEdit_optimized_2D_map->setEnabled(false);
+					ui_->actionExport_saved_2D_map->setEnabled(false);
+					ui_->actionImport_2D_map->setEnabled(false);
+					ui_->actionView_optimized_mesh->setEnabled(false);
+					ui_->actionExport_optimized_mesh->setEnabled(false);
+					if(r == QMessageBox::Yes)
+					{
+						regenerateSavedMap();
+					}
+				}
+			}
+		}
+
+		// Update buttons state
+		if(ui_->comboBox_optimizationFlavor->currentIndex() == 2)
+		{
+			// Local optimized graph
+			if(graphes_.empty())
+			{
+				ui_->label_timeOptimization->setNum(0);
+				ui_->label_poses->setNum((int)optPoses.size());
+				graphes_.push_back(optPoses);
+			}
+			ui_->horizontalSlider_rotation->setEnabled(false);
+			ui_->pushButton_applyRotation->setEnabled(false);
+			ui_->spinBox_optimizationsFrom->setEnabled(false);
+			ui_->checkBox_spanAllMaps->setEnabled(false);
+			ui_->checkBox_wmState->setEnabled(false);
+			ui_->checkBox_alignPosesWithGPS->setEnabled(false);
+			ui_->checkBox_alignPosesWithGroundTruth->setEnabled(false);
+			ui_->checkBox_alignScansCloudsWithGroundTruth->setEnabled(false);
+			ui_->checkBox_ignoreIntermediateNodes->setEnabled(false);
+		}
+		else
+		{
+			// Global map re-optimized
+			ui_->pushButton_applyRotation->setEnabled(true);
+			ui_->horizontalSlider_rotation->setEnabled(true);
+			ui_->spinBox_optimizationsFrom->setEnabled(true);
+			ui_->checkBox_spanAllMaps->setEnabled(true);
+			ui_->checkBox_wmState->setEnabled(true);
+			ui_->checkBox_alignPosesWithGPS->setEnabled(true);
+			ui_->checkBox_alignPosesWithGroundTruth->setEnabled(true);
+			ui_->checkBox_alignScansCloudsWithGroundTruth->setEnabled(true);
+			ui_->checkBox_ignoreIntermediateNodes->setEnabled(true);
+		}
+		updateGraphRotation();
 	}
 	if(graphes_.size())
 	{
@@ -8237,7 +8548,18 @@ bool DatabaseViewer::addConstraint(int from, int to, bool silent)
 			}
 		}
 
-		t = reg->computeTransformationMod(*fromS, *toS, guess, &info);
+		if(switchedIds)
+		{
+			t = reg->computeTransformationMod(*toS, *fromS, guess.isNull()?guess:guess.inverse(), &info);
+			if(!t.isNull())
+			{
+				t = t.inverse();
+			}
+		}
+		else
+		{
+			t = reg->computeTransformationMod(*fromS, *toS, guess, &info);
+		}
 		delete reg;
 		UDEBUG("");
 

@@ -39,12 +39,16 @@ MarkerDetector::MarkerDetector(const ParametersMap & parameters)
 	maxRange_ = Parameters::defaultMarkerMaxRange();
 	minRange_ = Parameters::defaultMarkerMinRange();
 	dictionaryId_ = Parameters::defaultMarkerDictionary();
-#if CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=2)
+#if CV_MAJOR_VERSION > 4 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION >= 7)
+    detectorParams_.reset(new cv::aruco::DetectorParameters());
+#elif CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=2)
 	detectorParams_ = cv::aruco::DetectorParameters::create();
 #else
 	detectorParams_.reset(new cv::aruco::DetectorParameters());
 #endif
-#if CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=3)
+#if CV_MAJOR_VERSION > 4 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION >= 7)
+    detectorParams_->cornerRefinementMethod = (cv::aruco::CornerRefineMethod) Parameters::defaultMarkerCornerRefinementMethod();
+#elif CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=3)
 	detectorParams_->cornerRefinementMethod = Parameters::defaultMarkerCornerRefinementMethod();
 #else
 	detectorParams_->doCornerRefinement = Parameters::defaultMarkerCornerRefinementMethod()!=0;
@@ -70,7 +74,11 @@ void MarkerDetector::parseParameters(const ParametersMap & parameters)
 	detectorParams_->minCornerDistanceRate = 0.05;
 	detectorParams_->minDistanceToBorder = 3;
 	detectorParams_->minMarkerDistanceRate = 0.05;
-#if CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=3)
+#if CV_MAJOR_VERSION > 4 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION >= 7)
+    int cornerRefinementMethod;
+    Parameters::parse(parameters, Parameters::kMarkerCornerRefinementMethod(), cornerRefinementMethod);
+    detectorParams_->cornerRefinementMethod = (cv::aruco::CornerRefineMethod)cornerRefinementMethod;
+#elif CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=3)
 	Parameters::parse(parameters, Parameters::kMarkerCornerRefinementMethod(), detectorParams_->cornerRefinementMethod);
 #else
 	int doCornerRefinement = detectorParams_->doCornerRefinement?1:0;
@@ -103,7 +111,10 @@ void MarkerDetector::parseParameters(const ParametersMap & parameters)
 		dictionaryId_ = Parameters::defaultMarkerDictionary();
 	}
 #endif
-#if CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=2)
+#if CV_MAJOR_VERSION > 4 || (CV_MAJOR_VERSION == 4 && CV_MINOR_VERSION >= 7)
+    dictionary_.reset(new cv::aruco::Dictionary());
+    *dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::PredefinedDictionaryType(dictionaryId_));
+#elif CV_MAJOR_VERSION > 3 || (CV_MAJOR_VERSION == 3 && CV_MINOR_VERSION >=2)
 	dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::PREDEFINED_DICTIONARY_NAME(dictionaryId_));
 #else
 	dictionary_.reset(new cv::aruco::Dictionary());
@@ -131,11 +142,69 @@ std::map<int, Transform> MarkerDetector::detect(const cv::Mat & image, const Cam
 }
 
 std::map<int, MarkerInfo> MarkerDetector::detect(const cv::Mat & image,
+                           const std::vector<CameraModel> & models,
+                           const cv::Mat & depth,
+                           const std::map<int, float> & markerLengths,
+                           cv::Mat * imageWithDetections)
+{
+	UASSERT(!models.empty() && !image.empty());
+	UASSERT(int((image.cols/models.size())*models.size()) == image.cols);
+	UASSERT(int((depth.cols/models.size())*models.size()) == depth.cols);
+	int subRGBWidth = image.cols/models.size();
+	int subDepthWidth = depth.cols/models.size();
+
+	std::map<int, MarkerInfo> allInfo;
+	for(size_t i=0; i<models.size(); ++i)
+	{
+		cv::Mat subImage(image, cv::Rect(subRGBWidth*i, 0, subRGBWidth, image.rows));
+		cv::Mat subDepth;
+		if(!depth.empty())
+			subDepth = cv::Mat(depth, cv::Rect(subDepthWidth*i, 0, subDepthWidth, depth.rows));
+		CameraModel model = models[i];
+		cv::Mat subImageWithDetections;
+		std::map<int, MarkerInfo> subInfo = detect(subImage, model, subDepth, markerLengths, imageWithDetections?&subImageWithDetections:0);
+		if(ULogger::level() >= ULogger::kWarning)
+		{
+			for(std::map<int, MarkerInfo>::iterator iter=subInfo.begin(); iter!=subInfo.end(); ++iter)
+			{
+				std::pair<std::map<int, MarkerInfo>::iterator, bool> inserted = allInfo.insert(*iter);
+				if(!inserted.second)
+				{
+					UWARN("Marker %d already added by another camera, ignoring detection from camera %d", iter->first, i);
+				}
+			}
+		}
+		else
+		{
+			allInfo.insert(subInfo.begin(), subInfo.end());
+		}
+		if(imageWithDetections)
+		{
+			if(i==0)
+			{
+				*imageWithDetections = image.clone();
+			}
+			if(!subImageWithDetections.empty())
+			{
+				subImageWithDetections.copyTo(cv::Mat(*imageWithDetections, cv::Rect(subRGBWidth*i, 0, subRGBWidth, image.rows)));
+			}
+		}
+	}
+	return allInfo;
+}
+
+std::map<int, MarkerInfo> MarkerDetector::detect(const cv::Mat & image,
                            const CameraModel & model,
                            const cv::Mat & depth,
                            const std::map<int, float> & markerLengths,
                            cv::Mat * imageWithDetections)
 {
+	if(!image.empty() && image.cols != model.imageWidth())
+	{
+		UERROR("This method cannot handle multi-camera marker detection, use the other function version supporting it.");
+		return std::map<int, MarkerInfo>();
+	}
+
     std::map<int, MarkerInfo> detections;
 
 #ifdef HAVE_OPENCV_ARUCO
@@ -257,7 +326,7 @@ std::map<int, MarkerInfo> MarkerDetector::detect(const cv::Mat & image,
 								 R.at<double>(2,0), R.at<double>(2,1), R.at<double>(2,2), tvecs[i].val[2]);
 				Transform pose = model.localTransform() * t;
 				detections.insert(std::make_pair(ids[i], MarkerInfo(ids[i], length, pose)));
-				UDEBUG("Marker %d detected at %s (%s)", ids[i], pose.prettyPrint().c_str(), t.prettyPrint().c_str());
+				UDEBUG("Marker %d detected in base_link: %s, optical_link=%s, local transform=%s", ids[i], pose.prettyPrint().c_str(), t.prettyPrint().c_str(), model.localTransform().prettyPrint().c_str());
 			}
 		}
 		if(markerLength_ == 0 && !scales.empty())

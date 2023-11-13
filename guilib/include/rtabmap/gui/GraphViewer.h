@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef RTABMAP_GRAPHVIEWER_H_
 #define RTABMAP_GRAPHVIEWER_H_
 
-#include "rtabmap/gui/RtabmapGuiExp.h" // DLL export/import defines
+#include "rtabmap/gui/rtabmap_gui_export.h" // DLL export/import defines
 
 #include <QGraphicsView>
 #include <QtCore/QMap>
@@ -37,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/GPS.h>
 #include <opencv2/opencv.hpp>
 #include <map>
+#include <set>
 #include <vector>
 
 class QGraphicsItem;
@@ -48,7 +49,7 @@ namespace rtabmap {
 class NodeItem;
 class LinkItem;
 
-class RTABMAPGUI_EXP GraphViewer : public QGraphicsView {
+class RTABMAP_GUI_EXPORT GraphViewer : public QGraphicsView {
 
 	Q_OBJECT;
 

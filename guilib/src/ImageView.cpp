@@ -33,6 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <QFileDialog>
 #include <QtCore/QDir>
 #include <QAction>
+#include <QActionGroup>
 #include <QGraphicsEffect>
 #include <QInputDialog>
 #include <QVBoxLayout>
@@ -68,7 +69,11 @@ public:
 		delete _placeHolder;
 	}
 
-	void setColor(const QColor & color);
+	void setWidth(int width)
+	{
+		_width = width;
+		this->setPen(QPen(pen().color(), _width));
+	}
 
 protected:
 	virtual void hoverEnterEvent ( QGraphicsSceneHoverEvent * event )
@@ -166,11 +171,13 @@ ImageView::ImageView(QWidget * parent) :
 		QWidget(parent),
 		_alpha(100),
 		_featuresSize(0.0f),
+		_linesWidth(0),
 		_defaultBgColor(Qt::black),
 		_defaultFeatureColor(Qt::yellow),
 		_defaultMatchingFeatureColor(Qt::magenta),
 		_defaultMatchingLineColor(Qt::cyan),
-		_depthColorMapRange(0),
+		_depthColorMapMinRange(0),
+		_depthColorMapMaxRange(0),
 		_imageItem(0),
 		_imageDepthItem(0)
 {
@@ -211,6 +218,7 @@ ImageView::ImageView(QWidget * parent) :
 	_showLines = _featureMenu->addAction(tr("Show lines"));
 	_showLines->setCheckable(true);
 	_showLines->setChecked(true);
+	_setLinesWidth = _featureMenu->addAction(tr("Set lines width..."));
 	_setFeatureColor = _featureMenu->addAction(tr("Set default feature color"));
 	_setFeatureColor->setIcon(createIcon(_defaultFeatureColor));
 	_setFeatureColor->setIconVisibleInMenu(true);
@@ -252,13 +260,14 @@ ImageView::ImageView(QWidget * parent) :
 	_colorMapBlueToRed = colorMap->addAction(tr("Blue to red"));
 	_colorMapBlueToRed->setCheckable(true);
 	_colorMapBlueToRed->setChecked(false);
-	_colorMapRange = colorMap->addAction(tr("Max Range..."));
+	_colorMapMinRange = colorMap->addAction(tr("Min Range..."));
+	_colorMapMaxRange = colorMap->addAction(tr("Max Range..."));
 	group = new QActionGroup(this);
 	group->addAction(_colorMapWhiteToBlack);
 	group->addAction(_colorMapBlackToWhite);
 	group->addAction(_colorMapRedToBlue);
 	group->addAction(_colorMapBlueToRed);
-	group->addAction(_colorMapRange);
+	group->addAction(_colorMapMaxRange);
 	_saveImage = _menu->addAction(tr("Save picture..."));
 	_saveImage->setEnabled(false);
 
@@ -280,6 +289,7 @@ void ImageView::saveSettings(QSettings & settings, const QString & group) const
 	settings.setValue("features_shown", this->isFeaturesShown());
 	settings.setValue("features_size", this->getFeaturesSize());
 	settings.setValue("lines_shown", this->isLinesShown());
+	settings.setValue("lines_width", this->getLinesWidth());
 	settings.setValue("alpha", this->getAlpha());
 	settings.setValue("bg_color", this->getDefaultBackgroundColor());
 	settings.setValue("feature_color", this->getDefaultFeatureColor());
@@ -289,7 +299,8 @@ void ImageView::saveSettings(QSettings & settings, const QString & group) const
 	settings.setValue("graphics_view_scale", this->isGraphicsViewScaled());
 	settings.setValue("graphics_view_scale_to_height", this->isGraphicsViewScaledToHeight());
 	settings.setValue("colormap", _colorMapWhiteToBlack->isChecked()?0:_colorMapBlackToWhite->isChecked()?1:_colorMapRedToBlue->isChecked()?2:3);
-	settings.setValue("colormap_range", this->getDepthColorMapRange());
+	settings.setValue("colormap_min_range", this->getDepthColorMapMinRange());
+	settings.setValue("colormap_max_range", this->getDepthColorMapMaxRange());
 	if(!group.isEmpty())
 	{
 		settings.endGroup();
@@ -307,6 +318,7 @@ void ImageView::loadSettings(QSettings & settings, const QString & group)
 	this->setFeaturesShown(settings.value("features_shown", this->isFeaturesShown()).toBool());
 	this->setFeaturesSize(settings.value("features_size", this->getFeaturesSize()).toInt());
 	this->setLinesShown(settings.value("lines_shown", this->isLinesShown()).toBool());
+	this->setLinesWidth(settings.value("lines_width", this->getLinesWidth()).toInt());
 	this->setAlpha(settings.value("alpha", this->getAlpha()).toInt());
 	this->setDefaultBackgroundColor(settings.value("bg_color", this->getDefaultBackgroundColor()).value<QColor>());
 	this->setDefaultFeatureColor(settings.value("feature_color", this->getDefaultFeatureColor()).value<QColor>());
@@ -320,7 +332,9 @@ void ImageView::loadSettings(QSettings & settings, const QString & group)
 	_colorMapBlackToWhite->setChecked(colorMap==1);
 	_colorMapRedToBlue->setChecked(colorMap==2);
 	_colorMapBlueToRed->setChecked(colorMap==3);
-	this->setDepthColorMapRange(settings.value("colormap_range", this->getDepthColorMapRange()).toFloat());
+	this->setDepthColorMapRange(
+			settings.value("colormap_min_range", this->getDepthColorMapMinRange()).toFloat(),
+			settings.value("colormap_max_range", settings.value("colormap_range" /*backward compatibility*/, this->getDepthColorMapMaxRange())).toFloat());
 	if(!group.isEmpty())
 	{
 		settings.endGroup();
@@ -384,9 +398,14 @@ const QColor & ImageView::getBackgroundColor() const
 	return _graphicsView->backgroundBrush().color();
 }
 
-float ImageView::getDepthColorMapRange() const
+float ImageView::getDepthColorMapMinRange() const
 {
-	return _depthColorMapRange;
+	return _depthColorMapMinRange;
+}
+
+float ImageView::getDepthColorMapMaxRange() const
+{
+	return _depthColorMapMaxRange;
 }
 
 uCvQtDepthColorMap ImageView::getDepthColorMap() const
@@ -686,9 +705,10 @@ void ImageView::setBackgroundColor(const QColor & color)
 	}
 }
 
-void ImageView::setDepthColorMapRange(float value)
+void ImageView::setDepthColorMapRange(float min, float max)
 {
-	_depthColorMapRange = value;
+	_depthColorMapMinRange = min;
+	_depthColorMapMaxRange = max;
 }
 
 
@@ -796,9 +816,8 @@ void ImageView::paintEvent(QPaintEvent *event)
 			{
 				for(QList<QGraphicsLineItem*>::iterator iter = _lines.begin(); iter != _lines.end(); ++iter)
 				{
-					QColor color = (*iter)->pen().color();
 					painter.save();
-					painter.setPen(color);
+					painter.setPen(QPen((*iter)->pen().color(), _linesWidth));
 					painter.drawLine((*iter)->line());
 					painter.restore();
 				}
@@ -862,12 +881,12 @@ void ImageView::contextMenuEvent(QContextMenuEvent * e)
 				if(QFileInfo(text).suffix().compare("pdf") == 0)
 				{
 					QPrinter printer(QPrinter::HighResolution);
-					printer.setOrientation(QPrinter::Portrait);
+					printer.setPageOrientation(QPageLayout::Portrait);
 					printer.setOutputFileName( text );
 					QPainter p(&printer);
 					p.begin(&printer);
-					double xscale = printer.pageRect().width()/double(_graphicsView->sceneRect().width());
-					double yscale = printer.pageRect().height()/double(_graphicsView->sceneRect().height());
+					double xscale = printer.pageLayout().paintRectPixels(printer.resolution()).width()/double(_graphicsView->sceneRect().width());
+					double yscale = printer.pageLayout().paintRectPixels(printer.resolution()).height()/double(_graphicsView->sceneRect().height());
 					double scale = qMin(xscale, yscale);
 					p.scale(scale, scale);
 					_graphicsView->scene()->render(&p, _graphicsView->sceneRect(), _graphicsView->sceneRect());
@@ -966,13 +985,27 @@ void ImageView::contextMenuEvent(QContextMenuEvent * e)
 			this->setImageDepth(_imageDepthCv);
 		Q_EMIT configChanged();
 	}
-	else if(action == _colorMapRange)
+	else if(action == _colorMapMinRange)
 	{
 		bool ok = false;
-		double value = QInputDialog::getDouble(this, tr("Set depth colormap max range"), tr("Range (m), 0=no limit"), _depthColorMapRange, 0, 9999, 1, &ok);
+		double value = QInputDialog::getDouble(this, tr("Set depth colormap min range"), tr("Range (m), 0=no limit"), _depthColorMapMinRange, 0, 9999, 1, &ok);
 		if(ok)
 		{
-			this->setDepthColorMapRange(value);
+			this->setDepthColorMapRange(value, _depthColorMapMaxRange);
+			if(!_imageDepthCv.empty())
+				this->setImageDepth(_imageDepthCv);
+			Q_EMIT configChanged();
+		}
+	}
+	else if(action == _colorMapMaxRange)
+	{
+		bool ok = false;
+		double value = QInputDialog::getDouble(this, tr("Set depth colormap max range"), tr("Range (m), 0=no limit"), _depthColorMapMaxRange, 0, 9999, 1, &ok);
+		if(ok)
+		{
+			this->setDepthColorMapRange(_depthColorMapMinRange, value);
+			if(!_imageDepthCv.empty())
+				this->setImageDepth(_imageDepthCv);
 			Q_EMIT configChanged();
 		}
 	}
@@ -993,6 +1026,16 @@ void ImageView::contextMenuEvent(QContextMenuEvent * e)
 		if(ok)
 		{
 			this->setFeaturesSize(value);
+			Q_EMIT configChanged();
+		}
+	}
+	else if(action == _setLinesWidth)
+	{
+		bool ok = false;
+		int value = QInputDialog::getInt(this, tr("Set lines width"), tr("Width"), _linesWidth, 0, 999, 1, &ok);
+		if(ok)
+		{
+			this->setLinesWidth(value);
 			Q_EMIT configChanged();
 		}
 	}
@@ -1112,6 +1155,7 @@ void ImageView::addLine(float x1, float y1, float x2, float y2, QColor color, co
 	color.setAlpha(this->getAlpha());
 	LineItem * item  = new LineItem(x1, y1, x2, y2, text);
 	item->setPen(QPen(color));
+	item->setWidth(_linesWidth);
 	_lines.push_back(item);
 	item->setVisible(isLinesShown());
 	item->setZValue(1);
@@ -1152,7 +1196,7 @@ void ImageView::setImage(const QImage & image)
 void ImageView::setImageDepth(const cv::Mat & imageDepth)
 {
 	_imageDepthCv = imageDepth;
-	setImageDepth(uCvMat2QImage(_imageDepthCv, true, getDepthColorMap(), 0.0f, _depthColorMapRange));
+	setImageDepth(uCvMat2QImage(_imageDepthCv, true, getDepthColorMap(), _depthColorMapMinRange, _depthColorMapMaxRange));
 }
 
 void ImageView::setImageDepth(const QImage & imageDepth)
@@ -1267,6 +1311,22 @@ void ImageView::setFeaturesSize(int size)
 		iter.value()->setRect(kpt.pt.x-sizef/2.0f, kpt.pt.y-sizef/2.0f, sizef, sizef);
 	}
 
+	if(!_graphicsView->isVisible())
+	{
+		this->update();
+	}
+}
+
+void ImageView::setLinesWidth(int width)
+{
+	_linesWidth = width;
+	for(QList<QGraphicsLineItem*>::iterator iter=_lines.begin(); iter!=_lines.end(); ++iter)
+	{
+		if(dynamic_cast<LineItem*>(*iter))
+		{
+			((LineItem*)(*iter))->setWidth(_linesWidth);
+		}
+	}
 	if(!_graphicsView->isVisible())
 	{
 		this->update();

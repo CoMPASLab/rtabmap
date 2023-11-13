@@ -27,8 +27,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "rtabmap/core/RtabmapExp.h" // DLL export/import defines
-
 #include "rtabmap/core/StereoCameraModel.h"
 #include "rtabmap/core/Camera.h"
 #include "rtabmap/core/Version.h"
@@ -43,7 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace rtabmap
 {
 
-class RTABMAP_EXP CameraDepthAI :
+class RTABMAP_CORE_EXPORT CameraDepthAI :
 	public Camera
 {
 public:
@@ -59,6 +57,7 @@ public:
 
 	void setOutputDepth(bool enabled, int confidence = 200);
 	void setIMUFirmwareUpdate(bool enabled);
+	void setIMUPublished(bool published);
 
 	virtual bool init(const std::string & calibrationFolder = ".", const std::string & cameraName = "");
 	virtual bool isCalibrated() const;
@@ -76,6 +75,7 @@ private:
 	int depthConfidence_;
 	int resolution_;
 	bool imuFirmwareUpdate_;
+	bool imuPublished_;
 	std::shared_ptr<dai::Device> device_;
 	std::shared_ptr<dai::DataOutputQueue> leftQueue_;
 	std::shared_ptr<dai::DataOutputQueue> rightOrDepthQueue_;
