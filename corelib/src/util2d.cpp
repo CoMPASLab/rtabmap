@@ -41,6 +41,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <opencv2/imgproc/types_c.h>
 #include <map>
 #include <Eigen/Core>
+#include <iomanip>
+#include <sys/time.h>
 
 #if CV_MAJOR_VERSION >= 3
 #include <opencv2/photo/photo.hpp>
@@ -753,9 +755,25 @@ cv::Mat disparityFromStereoImages(
 	{
 		leftMono = leftImage;
 	}
+
 	cv::Mat disparity;
 	StereoDense * stereo = StereoDense::create(parameters);
+
+    timeval time;
+    gettimeofday(&time, 0);
+    long micros_before = time.tv_sec * 1e6 + time.tv_usec;
+
 	disparity = stereo->computeDisparity(leftMono, rightImage);
+
+    gettimeofday(&time, 0);
+    long micros_after = time.tv_sec * 1e6 + time.tv_usec;
+
+	cv::Mat converted;
+    disparity.convertTo(converted, CV_8UC3);
+    cv::imwrite("./" + std::to_string(micros_after) + ".png", disparity);
+
+    std::cout << (micros_after - micros_before) * 1e-3 << std::endl;
+
 	delete stereo;
 	return disparity;
 }
