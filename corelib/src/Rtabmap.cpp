@@ -103,6 +103,7 @@ Rtabmap::Rtabmap() :
 	_maxMemoryAllowed(Parameters::defaultRtabmapMemoryThr()), // 0=inf
 	_loopThr(Parameters::defaultRtabmapLoopThr()),
 	_loopRatio(Parameters::defaultRtabmapLoopRatio()),
+	_loopAdditionalRegistrations(Parameters::defaultRtabmapLoopAdditionalRegistrations()),
 	_aggressiveLoopThr(Parameters::defaultRGBDAggressiveLoopThr()),
 	_virtualPlaceLikelihoodRatio(Parameters::defaultRtabmapVirtualPlaceLikelihoodRatio()),
 	_maxLoopClosureDistance(Parameters::defaultRGBDMaxLoopClosureDistance()),
@@ -155,6 +156,7 @@ Rtabmap::Rtabmap() :
 	_createGlobalScanMap(Parameters::defaultRGBDProximityGlobalScanMap()),
 	_markerPriorsLinearVariance(Parameters::defaultMarkerPriorsVarianceLinear()),
 	_markerPriorsAngularVariance(Parameters::defaultMarkerPriorsVarianceAngular()),
+	_optimizationInterval(Parameters::defaultOptimizerInterval()),
 	_loopClosureHypothesis(0,0.0f),
 	_highestHypothesis(0,0.0f),
 	_lastProcessTime(0.0),
@@ -485,6 +487,8 @@ void Rtabmap::close(bool databaseSaved, const std::string & ouputDatabasePath)
 	_globalScanMap.clear();
 	_globalScanMapPoses.clear();
 
+	_optimizationIntervalCountdown = _optimizationInterval;
+
 	_nodesToRepublish.clear();
 
 	flushStatisticLogs();
@@ -569,6 +573,7 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
 	Parameters::parse(parameters, Parameters::kRtabmapMemoryThr(), _maxMemoryAllowed);
 	Parameters::parse(parameters, Parameters::kRtabmapLoopThr(), _loopThr);
 	Parameters::parse(parameters, Parameters::kRtabmapLoopRatio(), _loopRatio);
+	Parameters::parse(parameters, Parameters::kRtabmapLoopAdditionalRegistrations(), _loopAdditionalRegistrations);
 	Parameters::parse(parameters, Parameters::kRGBDAggressiveLoopThr(), _aggressiveLoopThr);
 	Parameters::parse(parameters, Parameters::kRtabmapVirtualPlaceLikelihoodRatio(), _virtualPlaceLikelihoodRatio);
 
@@ -671,6 +676,8 @@ void Rtabmap::parseParameters(const ParametersMap & parameters)
 			}
 		}
 	}
+
+	Parameters::parse(parameters, Parameters::kOptimizerInterval(), _optimizationInterval);
 
 	UASSERT(_rgbdLinearUpdate >= 0.0f);
 	UASSERT(_rgbdAngularUpdate >= 0.0f);
@@ -1111,6 +1118,7 @@ void Rtabmap::resetMemory()
 	_optimizeFromGraphEndChanged = false;
 	_globalScanMap.clear();
 	_globalScanMapPoses.clear();
+	_optimizationIntervalCountdown = _optimizationInterval;
 	_nodesToRepublish.clear();
 	this->clearPath(0);
 
@@ -2116,18 +2124,51 @@ bool Rtabmap::process(
 			}
 
 			//============================================================
+            // Populate _loopClosureHypotheses in order of likelihood
+            //============================================================
+            ULOGGER_INFO("creating hypotheses...");
+            _loopClosureHypotheses.clear();
+            if (posterior.size())
+            {
+                // Populate _loopClosureHypotheses from the posterior map
+                for(std::map<int, float>::const_reverse_iterator iter = posterior.rbegin(); iter != posterior.rend(); ++iter)
+                {
+                    if(iter->first > 0)
+                    {
+                        _loopClosureHypotheses.push_back(std::make_pair(iter->first, iter->second));
+                    }
+                }
+
+                // Define a comparator for sorting the loop closure hypotheses by likelihood
+                auto comparator = [](const std::pair<int, float> & a, const std::pair<int, float> & b) -> bool
+                {
+                    return a.second < b.second;
+                };
+
+                _loopClosureHypotheses.sort(comparator);
+
+                // Print the hypotheses in order of likelihood
+                for(const auto& hypothesis : _loopClosureHypotheses)
+                {
+                    UDEBUG("Hypothesis %d: %f", hypothesis.first, hypothesis.second);
+                }
+            }
+
+			//============================================================
 			// Select the highest hypothesis
 			//============================================================
-			ULOGGER_INFO("creating hypotheses...");
-			if(posterior.size())
+			if(_loopClosureHypotheses.size())
 			{
-				for(std::map<int, float>::const_reverse_iterator iter = posterior.rbegin(); iter != posterior.rend(); ++iter)
-				{
-					if(iter->first > 0 && iter->second > _highestHypothesis.second)
-					{
-						_highestHypothesis = *iter;
-					}
-				}
+				// for(std::map<int, float>::const_reverse_iterator iter = posterior.rbegin(); iter != posterior.rend(); ++iter)
+				// {
+				// 	if(iter->first > 0 && iter->second > _highestHypothesis.second)
+				// 	{
+				// 		_highestHypothesis = *iter;
+				// 	}
+				// }
+
+				_highestHypothesis = _loopClosureHypotheses.back();
+
 				// With the virtual place, use sum of LC probabilities (1 - virtual place hypothesis).
 				_highestHypothesis.second = 1-posterior.begin()->second;
 			}
@@ -3049,33 +3090,41 @@ bool Rtabmap::process(
 			info.covariance = cv::Mat::eye(6,6,CV_64FC1);
 			if(_rgbdSlamMode)
 			{
-				transform = _memory->computeTransform(
-						_loopClosureHypothesis.first,
-						signature->id(),
-						_loopClosureIdentityGuess?Transform::getIdentity():Transform(),
-						&info);
+				unsigned int registrationsAttempted = 0;
+				for (std::list<std::pair<int, float> >::const_reverse_iterator iter = _loopClosureHypotheses.rbegin(); iter != _loopClosureHypotheses.rend() && registrationsAttempted + 1 < _loopAdditionalRegistrations; iter++)
+				{
+					transform = _memory->computeTransform(
+							iter->first,
+							signature->id(),
+							_loopClosureIdentityGuess?Transform::getIdentity():Transform(),
+							&info);
+					registrationsAttempted++;
 
-				loopClosureVisualInliersMeanDist = info.inliersMeanDistance;
-				loopClosureVisualInliersDistribution = info.inliersDistribution;
+					loopClosureVisualInliersMeanDist = info.inliersMeanDistance;
+					loopClosureVisualInliersDistribution = info.inliersDistribution;
 
-				loopClosureVisualInliers = info.inliers;
-				loopClosureVisualInliersRatio = info.inliersRatio;
-				loopClosureVisualMatches = info.matches;
-				rejectedGlobalLoopClosure = transform.isNull();
-				if(rejectedGlobalLoopClosure)
-				{
-					UWARN("Rejected loop closure %d -> %d: %s",
-							_loopClosureHypothesis.first, signature->id(), info.rejectedMsg.c_str());
-				}
-				else if(_maxLoopClosureDistance>0.0f && transform.getNorm() > _maxLoopClosureDistance)
-				{
-					rejectedGlobalLoopClosure = true;
-					UWARN("Rejected localization %d -> %d because distance to map (%fm) is over %s=%fm.",
-							_loopClosureHypothesis.first, signature->id(), transform.getNorm(), Parameters::kRGBDMaxLoopClosureDistance().c_str(), _maxLoopClosureDistance);
-				}
-				else
-				{
-					transform = transform.inverse();
+					loopClosureVisualInliers = info.inliers;
+					loopClosureVisualInliersRatio = info.inliersRatio;
+					loopClosureVisualMatches = info.matches;
+					rejectedGlobalLoopClosure = transform.isNull();
+
+					if(rejectedGlobalLoopClosure)
+					{
+						UWARN("Rejected loop closure %d -> %d: %s",
+								iter->first, signature->id(), info.rejectedMsg.c_str());
+					}
+					else if(_maxLoopClosureDistance>0.0f && transform.getNorm() > _maxLoopClosureDistance)
+					{
+						rejectedGlobalLoopClosure = true;
+						UWARN("Rejected localization %d -> %d because distance to map (%fm) is over %s=%fm.",
+								iter->first, signature->id(), transform.getNorm(), Parameters::kRGBDMaxLoopClosureDistance().c_str(), _maxLoopClosureDistance);
+					}
+					else
+					{
+						transform = transform.inverse();
+						_loopClosureHypothesis = *iter;
+						break;
+					}
 				}
 			}
 			if(!rejectedGlobalLoopClosure)
@@ -3198,6 +3247,7 @@ bool Rtabmap::process(
 	if(_rgbdSlamMode
 		&&
 		(_loopClosureHypothesis.first>0 ||
+		 ((!data.absoluteDepth().empty()) && _optimizationIntervalCountdown == 0) || // Optimize if absolute depths are sent
 	     lastProximitySpaceClosureId>0 || // can be different map of the current one
 	     statistics_.reducedIds().size() ||
 		 (signature->hasLink(signature->id(), Link::kPosePrior) && !_graphOptimizer->priorsIgnored()) || // prior edge
@@ -3212,6 +3262,9 @@ bool Rtabmap::process(
 		  !landmarksDetected.empty()))
 	{
 		UASSERT(uContains(_optimizedPoses, signature->id()));
+
+		// Reset optimization interval countdown
+		_optimizationIntervalCountdown = _optimizationInterval;
 
 		//used in localization mode: filter virtual links
 		std::multimap<int, Link> localizationLinks = graph::filterLinks(signature->getLinks(), Link::kVirtualClosure);
@@ -3968,6 +4021,11 @@ bool Rtabmap::process(
 			}
 		}
 	}
+	else
+    {
+		// Decrement the optimization interval countdown, or keep it at 0
+        _optimizationIntervalCountdown = _optimizationIntervalCountdown == 0 ? 0 : _optimizationIntervalCountdown - 1;
+    }
 	int newLocId = _loopClosureHypothesis.first>0?_loopClosureHypothesis.first:lastProximitySpaceClosureId>0?lastProximitySpaceClosureId:0;
 	_lastLocalizationNodeId = newLocId!=0?newLocId:_lastLocalizationNodeId;
 	if(newLocId==0 && !landmarksDetected.empty())

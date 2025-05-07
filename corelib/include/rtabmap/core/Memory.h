@@ -380,6 +380,9 @@ private:
 
 	MarkerDetector * _markerDetector;
 
+	Transform firstAbsoluteDepth_;
+    bool firstAbsoluteDepthSet_ = false;
+
 	GlobalDescriptorExtractor * _globalDescriptorExtractor;
 };
 

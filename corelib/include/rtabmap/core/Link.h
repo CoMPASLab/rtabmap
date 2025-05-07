@@ -46,7 +46,9 @@ public:
 		kUserClosure,
 		kVirtualClosure,
 		kNeighborMerged,
+		kArbitraryFromTo, // Arbitrary transform between any two poses
 		kPosePrior, // Absolute pose in /world frame, From == To
+		kPoseZPrior, // Absolute Z component only, From == To
 		kLandmark,  // Transform /base_link -­­> /landmark, "From" is node observing the landmark "To" (landmark is negative id)
 		kGravity,  // Orientation of the base frame accordingly to gravity (From == To)
 		kEnd,

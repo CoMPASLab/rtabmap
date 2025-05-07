@@ -6107,6 +6107,50 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
 	}
 
 	// prior
+	if(!data.absoluteDepth().empty()) {
+        // Set value for first depth measurement
+        if (!firstAbsoluteDepthSet_)
+        {
+            if (!std::isnan(data.absoluteDepth().originalDepthMeasurement()) &&
+                std::abs(data.absoluteDepth().originalDepthMeasurement()) != std::numeric_limits<float>::infinity()){
+                // Create transform with first depth measurement
+                // This is already handled by the depth_filter node, but this is a backup
+                Transform initial_depth_transform(0.0, 0.0, data.absoluteDepth().originalDepthMeasurement(), 0.0, 0.0, 0.0, 1.0);
+                firstAbsoluteDepth_ = initial_depth_transform.inverse();
+                firstAbsoluteDepthSet_ = true;
+                printf("Got first absolute depth: %f\n", firstAbsoluteDepth_.z());
+        }
+        }
+
+        // Compute depth with respect to the origin of the trajectory if we have an available measurement
+        if (firstAbsoluteDepthSet_ && data.addAbsoluteDepthConstraint())
+        {
+            float currentDepth = data.absoluteDepth().depthInBaseLink(firstAbsoluteDepth_);
+            // Get variance and convert to information value (inverse of variance)
+            float variance = data.absoluteDepth().getVariance();
+            cv::Mat information_matrix = cv::Mat::eye(6, 6, CV_64FC1);
+			information_matrix.at<double>(2, 2) = 1.0f / variance;
+            // Add unary factor
+            printf("Relative depth: %f (original measurement %f)\n", currentDepth, data.absoluteDepth().originalDepthMeasurement());
+            s->addLink(Link(s->id(), s->id(), Link::kPoseZPrior,{0.f, 0.f, currentDepth, 0.f, 0.f, 0.f}, information_matrix));
+            // Reset add absolute depth constraint flag
+            data.setAddAbsoluteDepthConstraint(false);
+        }
+
+    }
+    if(!data.arbitraryPoseConstraints().empty() && _signatures.size() && _signatures.rbegin()->second->mapId() == _idMapCount)
+    {
+        int previousId = _signatures.rbegin()->second->id();
+        for (const auto & constraint : data.arbitraryPoseConstraints())
+        {
+            s->addLink(Link(s->id(), previousId, Link::kArbitraryFromTo,
+                            constraint.pose(),
+                            constraint.covariance().inv()));
+            float x, y, z, roll, pitch, yaw;
+            constraint.pose().getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
+            printf("Added arbitrary constraint between poses %d and %d: xyz=(%f %f %f), rpy=(%f %f %f)\n", previousId, s->id(), x, y, z, roll, pitch, yaw);
+        }
+    }
 	if(!data.globalPose().isNull() && data.globalPoseCovariance().cols==6 && data.globalPoseCovariance().rows==6 && data.globalPoseCovariance().cols==CV_64FC1)
 	{
 		s->addLink(Link(s->id(), s->id(), Link::kPosePrior, data.globalPose(), data.globalPoseCovariance().inv()));

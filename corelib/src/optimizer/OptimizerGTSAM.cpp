@@ -54,6 +54,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gtsam/GravityFactor.h"
 #include <optimizer/gtsam/XYFactor.h>
 #include <optimizer/gtsam/XYZFactor.h>
+#include <optimizer/gtsam/ZFactor.h>
 #include <gtsam/nonlinear/ISAM2.h>
 
 #ifdef RTABMAP_VERTIGO
@@ -385,7 +386,13 @@ std::map<int, Transform> OptimizerGTSAM::optimize(
 			UASSERT(!iter->second.transform().isNull());
 			if(id1 == id2)
 			{
-				if(iter->second.type() == Link::kPosePrior && !priorsIgnored() &&
+				if(iter->second.type() == Link::kPoseZPrior)
+				{
+					noiseModel::Diagonal::shared_ptr model = noiseModel::Diagonal::Precisions(Vector3(1e-3, 1e-3, 1e-3));
+					// X and Y can be anything because ZFactor only uses Z component
+					graph.add(ZFactor<gtsam::Pose3>(id1, gtsam::Point3(0, 0, iter->second.transform().z()), model));
+				}
+				else if(iter->second.type() == Link::kPosePrior && !priorsIgnored() &&
 				  (!landmarksIgnored() || id1>0))
 				{
 					if(isSlam2d())

@@ -51,6 +51,10 @@ std::string Link::typeName(Type type)
 		return "NeighborMerged";
 	if(type == Link::kPosePrior)
 		return "PosePrior";
+	if (type == Link::kPoseZPrior)
+		return "PoseZPrior";
+	if(type == Link::kArbitraryFromTo)
+		return "ArbitraryFromTo";
 	if(type == Link::kLandmark)
 		return "Landmark";
 	if(type == Link::kGravity)
