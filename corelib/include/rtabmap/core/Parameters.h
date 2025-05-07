@@ -194,9 +194,10 @@ class RTABMAP_CORE_EXPORT Parameters
     RTABMAP_PARAM(Rtabmap, RectifyOnlyFeatures,          bool, false,  uFormat("If \"%s\" is false and this parameter is true, the whole RGB image will not be rectified, only the features. Warning: As projection of RGB-D image to point cloud is assuming that images are rectified, the generated point cloud map will have wrong colors if this parameter is true.", kRtabmapImagesAlreadyRectified().c_str()));
 
     // Hypotheses selection
-    RTABMAP_PARAM(Rtabmap, LoopThr,           float, 0.11,      "Loop closing threshold.");
-    RTABMAP_PARAM(Rtabmap, LoopRatio,         float, 0,         "The loop closure hypothesis must be over LoopRatio x lastHypothesisValue.");
-    RTABMAP_PARAM(Rtabmap, LoopGPS,           bool,  true,      uFormat("Use GPS to filter likelihood (if GPS is recorded). Only locations inside the local radius \"%s\" of the current GPS location are considered for loop closure detection.", kRGBDLocalRadius().c_str()));
+    RTABMAP_PARAM(Rtabmap, LoopThr,                     float, 0.11,      "Loop closing threshold.");
+    RTABMAP_PARAM(Rtabmap, LoopRatio,                   float, 0,         "The loop closure hypothesis must be over LoopRatio x lastHypothesisValue.");
+    RTABMAP_PARAM(Rtabmap, LoopGPS,                     bool,  true,      uFormat("Use GPS to filter likelihood (if GPS is recorded). Only locations inside the local radius \"%s\" of the current GPS location are considered for loop closure detection.", kRGBDLocalRadius().c_str()));
+    RTABMAP_PARAM(Rtabmap, LoopAdditionalRegistrations, unsigned int, 0,  "Maximum number of additional loop closure registrations to attempt after highest-hypothesis registration fails.");
     RTABMAP_PARAM(Rtabmap, VirtualPlaceLikelihoodRatio, int, 0,  "Likelihood ratio for virtual place (for no loop closure hypothesis): 0=Mean / StdDev, 1=StdDev / (Max-Mean)");
 
     // Memory
@@ -419,6 +420,8 @@ class RTABMAP_CORE_EXPORT Parameters
     RTABMAP_PARAM(RGBD, ProximityMergedScanCovFactor, double, 100.0, uFormat("Covariance factor for one-to-many proximity detection (when %s>0 and scans are used).", kRGBDProximityPathMaxNeighbors().c_str()));
 
     // Graph optimization
+    RTABMAP_PARAM(Optimizer, Interval,        int, 0,          "Graph optimization interval if absolute depths and/or arbitrary pose constraints are provided");
+
 #ifdef RTABMAP_GTSAM
     RTABMAP_PARAM(Optimizer, Strategy,        int, 2,          "Graph optimization strategy: 0=TORO, 1=g2o, 2=GTSAM and 3=Ceres.");
     RTABMAP_PARAM(Optimizer, Iterations,      int, 20,         "Optimization iterations.");

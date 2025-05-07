@@ -14085,6 +14085,29 @@ If set to false, classic RTAB-Map loop closure detection is done using only imag
                       </property>
                      </widget>
                     </item>
+                    <item row="10" column="0">
+                     <widget class="QSpinBox" name="graphOptimization_interval">
+                      <property name="minimum">
+                       <number>0</number>
+                      </property>
+                      <property name="value">
+                       <number>3</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="10" column="1">
+                     <widget class="QLabel" name="graphOptimization_interval_label">
+                      <property name="text">
+                       <string>How many extra nodes to add before optimization is done if absolute depths are being provided (otherwise optimization is done every time a node is added)</string>
+                      </property>
+                      <property name="wordWrap">
+                       <bool>true</bool>
+                      </property>
+                      <property name="textInteractionFlags">
+                       <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                      </property>
+                     </widget>
+                    </item>
                    </layout>
                   </widget>
                  </item>

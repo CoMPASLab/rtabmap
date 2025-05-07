@@ -293,6 +293,7 @@ private:
 	unsigned int _maxMemoryAllowed; // signatures count in WM
 	float _loopThr;
 	float _loopRatio;
+	unsigned int _loopAdditionalRegistrations;
 	float _aggressiveLoopThr;
 	int _virtualPlaceLikelihoodRatio;
 	float _maxLoopClosureDistance;
@@ -347,8 +348,11 @@ private:
 	bool _createGlobalScanMap;
 	float _markerPriorsLinearVariance;
 	float _markerPriorsAngularVariance;
+	int _optimizationInterval;
+	int _optimizationIntervalCountdown;
 
 	std::pair<int, float> _loopClosureHypothesis;
+	std::list<std::pair<int, float> > _loopClosureHypotheses;
 	std::pair<int, float> _highestHypothesis;
 	double _lastProcessTime;
 	bool _someNodesHaveBeenTransferred;

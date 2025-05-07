@@ -41,6 +41,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/EnvSensor.h>
 #include <rtabmap/core/Landmark.h>
 #include <rtabmap/core/GlobalDescriptor.h>
+#include <rtabmap/core/Depth.h>
+#include <rtabmap/core/ArbitraryPoseConstraint.h>
 
 namespace rtabmap
 {
@@ -218,7 +220,8 @@ public:
 			_obstacleCellsCompressed.empty() &&
 			_emptyCellsRaw.empty() &&
 			_emptyCellsCompressed.empty() &&
-			imu_.empty());
+			imu_.empty() &&
+			absoluteDepth_.empty());
 	}
 
 	int id() const {return _id;}
@@ -368,6 +371,28 @@ public:
 
 	bool isPointVisibleFromCameras(const cv::Point3f & pt) const; // assuming point is in robot frame
 
+	// Set absoluteDepth
+    void setAbsoluteDepth(const Depth &absoluteDepth) {
+        absoluteDepth_ = absoluteDepth;
+    };
+
+    // Set flag for adding absolute depth constraint
+    void setAddAbsoluteDepthConstraint(bool addAbsoluteDepthConstraint) {
+        addAbsoluteDepthConstraint_ = addAbsoluteDepthConstraint;
+    };
+
+    // Get depth
+    const Depth & absoluteDepth() const {return absoluteDepth_;};
+
+    // Get flag for adding absolute depth constraint
+    bool addAbsoluteDepthConstraint() const { return addAbsoluteDepthConstraint_; };
+
+    void addArbitraryPoseConstraint(const ArbitraryPoseConstraint &arbitraryPoseConstraint) {
+        arbitraryPoseConstraints_.push_back(arbitraryPoseConstraint);
+    };
+    // Pose constraint passed directly to optimization graph
+    const std::vector<ArbitraryPoseConstraint>& arbitraryPoseConstraints() const {return arbitraryPoseConstraints_;};
+
 #ifdef HAVE_OPENCV_CUDEV
 	const cv::cuda::GpuMat & imageRawGpu() const {return _imageRawGpu;}
 	void setImageRawGpu(const cv::cuda::GpuMat & image) {_imageRawGpu = image;}
@@ -428,6 +453,13 @@ private:
 	GPS gps_;
 
 	IMU imu_;
+
+	// Absolute depth constraint
+    Depth absoluteDepth_;
+    bool addAbsoluteDepthConstraint_;
+
+	// Arbitrary pose constraints
+    std::vector<ArbitraryPoseConstraint> arbitraryPoseConstraints_;
 
 #ifdef HAVE_OPENCV_CUDEV
 	// Temporary buffers used for some optimizations,
