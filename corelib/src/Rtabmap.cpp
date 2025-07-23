@@ -3091,7 +3091,7 @@ bool Rtabmap::process(
 			if(_rgbdSlamMode)
 			{
 				unsigned int registrationsAttempted = 0;
-				for (std::list<std::pair<int, float> >::const_reverse_iterator iter = _loopClosureHypotheses.rbegin(); iter != _loopClosureHypotheses.rend() && registrationsAttempted + 1 < _loopAdditionalRegistrations; iter++)
+				for (std::list<std::pair<int, float> >::const_reverse_iterator iter = _loopClosureHypotheses.rbegin(); iter != _loopClosureHypotheses.rend() && registrationsAttempted < _loopAdditionalRegistrations + 1; iter++)
 				{
 					transform = _memory->computeTransform(
 							iter->first,
