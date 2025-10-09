@@ -313,6 +313,7 @@ DatabaseViewer::DatabaseViewer(const QString & ini, QWidget * parent) :
 	connect(ui_->actionUpdate_all_neighbor_covariances, SIGNAL(triggered()), this, SLOT(updateAllNeighborCovariances()));
 	connect(ui_->actionUpdate_all_loop_closure_covariances, SIGNAL(triggered()), this, SLOT(updateAllLoopClosureCovariances()));
 	connect(ui_->actionUpdate_all_landmark_covariances, SIGNAL(triggered()), this, SLOT(updateAllLandmarkCovariances()));
+	connect(ui_->actionUpdate_all_covariances_of_type, SIGNAL(triggered()), this, SLOT(updateAllCovariancesOfType()));
 	connect(ui_->actionRefine_links, SIGNAL(triggered()), this, SLOT(refineLinks()));
 	connect(ui_->actionRegenerate_local_grid_maps, SIGNAL(triggered()), this, SLOT(regenerateLocalMaps()));
 	connect(ui_->actionRegenerate_local_grid_maps_selected, SIGNAL(triggered()), this, SLOT(regenerateCurrentLocalMaps()));
@@ -4500,6 +4501,28 @@ void DatabaseViewer::updateAllLandmarkCovariances()
 			links.push_back(iter->second);
 		}
 	}
+	updateCovariances(links);
+}
+void DatabaseViewer::updateAllCovariancesOfType()
+{	
+	// Open QInputDialog to get the type
+	bool ok = false;
+	int type = QInputDialog::getInt(this, tr("Link Type"), tr("Type:"), 0, 0, 20, 1, &ok);
+	if(!ok)
+	{
+		return;
+	}
+
+	std::multimap<int, Link> allLinks = updateLinksWithModifications(links_);
+	QList<rtabmap::Link> links;
+	for(std::multimap<int, Link>::iterator iter=allLinks.begin(); iter!=allLinks.end(); ++iter)
+	{
+		if(iter->second.type() == type)
+		{
+			links.push_back(iter->second);
+		}
+	}
+
 	updateCovariances(links);
 }
 
