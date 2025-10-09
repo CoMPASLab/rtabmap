@@ -1569,7 +1569,7 @@ void DatabaseViewer::exportLinks()
 		file.open(path.toStdString().c_str());
 		if(file.is_open())
 		{
-			file << "from_id,to_id,type,information_matrix,covariance_matrix,transform,x,y,z,r,p,y\n";
+			file << "from_id,to_id,type,information_matrix,covariance_matrix,x,y,z,r,p,y\n";
 			for(std::multimap<int, rtabmap::Link>::iterator iter=links_.begin(); iter!=links_.end(); ++iter)
 			{
 				file << iter->second.from() << ",";
