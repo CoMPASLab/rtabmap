@@ -943,6 +943,7 @@
     <addaction name="actionUpdate_all_neighbor_covariances"/>
     <addaction name="actionUpdate_all_loop_closure_covariances"/>
     <addaction name="actionUpdate_all_landmark_covariances"/>
+    <addaction name="actionUpdate_all_covariances_of_type"/>
     <addaction name="separator"/>
     <addaction name="actionRegenerate_local_grid_maps"/>
     <addaction name="actionRegenerate_local_grid_maps_selected"/>
@@ -3601,6 +3602,11 @@
    <property name="text">
     <string>Update all landmark covariances...</string>
    </property>
+  </action>
+  <action name="actionUpdate_all_covariances_of_type">
+    <property name="text">
+     <string>Update all covariances of type...</string>
+    </property>
   </action>
  </widget>
  <customwidgets>

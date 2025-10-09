@@ -131,6 +131,7 @@ private Q_SLOTS:
 	void updateAllNeighborCovariances();
 	void updateAllLoopClosureCovariances();
 	void updateAllLandmarkCovariances();
+	void updateAllCovariancesOfType();
 	void refineLinks();
 	void resetAllChanges();
 	void graphNodeSelected(int);
