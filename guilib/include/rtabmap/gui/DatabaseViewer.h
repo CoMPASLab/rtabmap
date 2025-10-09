@@ -108,6 +108,7 @@ private Q_SLOTS:
 	void exportOptimizedMesh();
 	void updateOptimizedMesh();
 	void exportDatabase();
+	void exportLinks();
 	void extractImages();
 	void exportPosesRaw();
 	void exportPosesRGBDSLAMMotionCapture();

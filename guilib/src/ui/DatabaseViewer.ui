@@ -896,6 +896,7 @@
     <addaction name="separator"/>
     <addaction name="actionGenerate_3D_map_pcd"/>
     <addaction name="actionExport"/>
+    <addaction name="actionExport_links"/>
     <addaction name="actionExtract_images"/>
     <addaction name="menuExport_poses"/>
     <addaction name="menuExport_GPS"/>
@@ -3221,6 +3222,11 @@
    <property name="text">
     <string>Export database...</string>
    </property>
+  </action>
+  <action name="actionExport_links">
+    <property name="text">
+     <string>Export links...</string>
+    </property>
   </action>
   <action name="actionExtract_images">
    <property name="text">
