@@ -286,6 +286,7 @@ DatabaseViewer::DatabaseViewer(const QString & ini, QWidget * parent) :
 	connect(ui_->actionClose_database, SIGNAL(triggered()), this, SLOT(closeDatabase()));
 	connect(ui_->actionDatabase_recovery, SIGNAL(triggered()), this, SLOT(recoverDatabase()));
 	connect(ui_->actionExport, SIGNAL(triggered()), this, SLOT(exportDatabase()));
+	connect(ui_->actionExport_links, SIGNAL(triggered()), this, SLOT(exportLinks()));  // NEW
 	connect(ui_->actionExtract_images, SIGNAL(triggered()), this, SLOT(extractImages()));
 	connect(ui_->actionEdit_depth_image, SIGNAL(triggered()), this, SLOT(editDepthImage()));
 	connect(ui_->actionGenerate_graph_dot, SIGNAL(triggered()), this, SLOT(generateGraph()));
@@ -1548,6 +1549,102 @@ void DatabaseViewer::exportDatabase()
 			QMessageBox::warning(this, tr("Cannot export database"), tr("An output path must be set!"));
 		}
 	}
+}
+
+void DatabaseViewer::exportLinks()
+{
+	/*
+	 * Export links to CSV format:
+	 * from_id,to_id,type,information_matrix,covariance_matrix
+	 */
+	if(!dbDriver_ || ids_.size() == 0)
+	{
+		return;
+	}
+
+	QString path = QFileDialog::getSaveFileName(this, tr("Select file"), pathDatabase_, tr("CSV files (*.csv)"));
+	if(!path.isEmpty())
+	{
+		std::ofstream file;
+		file.open(path.toStdString().c_str());
+		if(file.is_open())
+		{
+			file << "from_id,to_id,type,information_matrix,covariance_matrix,transform,x,y,z,r,p,y\n";
+			for(std::multimap<int, rtabmap::Link>::iterator iter=links_.begin(); iter!=links_.end(); ++iter)
+			{
+				file << iter->second.from() << ",";
+				file << iter->second.to() << ",";
+				file << iter->second.type() << ",";
+
+				// Create a flattened Python-like list of the information matrix, or None if empty
+				if(!iter->second.infMatrix().empty())
+				{
+					file << "\"[";
+					for(int r=0; r<6; ++r)
+					{
+						for(int c=0; c<6; ++c)
+						{
+							file << iter->second.infMatrix().at<double>(r,c);
+							if(r!=5 || c!=5)
+							{
+								file << ",";
+							}
+						}
+					}
+					file << "]\"";
+				}
+				else
+				{
+					file << "\"None\"";
+				}
+
+				file << ",";
+
+				// Create a flattened Python-like list of the covariance matrix, or None if empty
+				// (the inverse of the information matrix)
+				if(!iter->second.infMatrix().empty())
+				{
+					cv::Mat cov = iter->second.infMatrix().inv();
+					file << "\"[";
+					for(int r=0; r<6; ++r)
+					{
+						for(int c=0; c<6; ++c)
+						{
+							file << cov.at<double>(r,c);
+							if(r!=5 || c!=5)
+							{
+								file << ",";
+							}
+						}
+					}
+					file << "]\"";
+				}
+				else
+				{
+					file << "\"None\"";
+				}
+
+				file << ",";
+
+				// Transform
+				const Transform &transform = iter->second.transform();
+				float x, y, z, roll, pitch, yaw;
+				transform.getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
+				file << x << "," << y << "," << z << "," << roll << "," << pitch << "," << yaw;
+
+				file << "\n";
+
+			}
+
+			file.close();
+			QMessageBox::information(this, tr("Export links"), tr("Links exported to \"%1\"!").arg(path));
+		}
+		else
+		{
+			QMessageBox::warning(this, tr("Cannot export links"), tr("Could not open file \"%1\"!").arg(path));
+		}
+	}
+
 }
 
 void DatabaseViewer::extractImages()
