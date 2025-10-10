@@ -1938,7 +1938,20 @@ void DatabaseViewer::updateIds()
 	for(std::multimap<int, Link>::iterator iter=unilinks.begin(); iter!=unilinks.end(); ++iter)
 	{
 		links.insert(*iter);
-		if(graph::findLink(unilinks, iter->second.to(), iter->second.from(), false) == unilinks.end())
+
+		// Check for inverse link of the SAME TYPE
+		bool inverseFound = false;
+		for(std::multimap<int, Link>::iterator invIter=unilinks.begin(); invIter!=unilinks.end(); ++invIter)
+		{
+			if(invIter->second.from() == iter->second.to() &&
+			   invIter->second.to() == iter->second.from() &&
+			   invIter->second.type() == iter->second.type())
+			{
+				inverseFound = true;
+				break;
+			}
+		}
+		if(!inverseFound)
 		{
 			links.insert(std::make_pair(iter->second.to(), iter->second.inverse()));
 		}
