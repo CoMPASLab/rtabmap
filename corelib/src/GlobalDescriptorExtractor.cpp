@@ -42,8 +42,10 @@ GlobalDescriptorExtractor::~GlobalDescriptorExtractor()
 }
 GlobalDescriptorExtractor * GlobalDescriptorExtractor::create(const ParametersMap & parameters)
 {
+	UDEBUG("GlobalDescriptorExtractor::create() called");
 	int type = Parameters::defaultMemGlobalDescriptorStrategy();
 	Parameters::parse(parameters, Parameters::kMemGlobalDescriptorStrategy(), type);
+	UDEBUG("Parsed GlobalDescriptorStrategy type = %d", type);
 	return create((GlobalDescriptorExtractor::Type)type, parameters);
 }
 GlobalDescriptorExtractor * GlobalDescriptorExtractor::create(GlobalDescriptorExtractor::Type type, const ParametersMap & parameters)
@@ -62,13 +64,17 @@ GlobalDescriptorExtractor * GlobalDescriptorExtractor::create(GlobalDescriptorEx
 	{
 #ifdef RTABMAP_PYTHON
 	case GlobalDescriptorExtractor::kPyDescriptor:
+		UDEBUG("Creating PyDescriptor...");
 		GlobalDescriptorExtractor = new PyDescriptor(parameters);
+		UDEBUG("PyDescriptor created successfully");
 		break;
 #endif
 	default:
+		UDEBUG("Using kUndef type (no global descriptor extraction)");
 		type = GlobalDescriptorExtractor::kUndef;
 		break;
 	}
+	UDEBUG("Returning GlobalDescriptorExtractor = %p", GlobalDescriptorExtractor);
 	return GlobalDescriptorExtractor;
 }
 

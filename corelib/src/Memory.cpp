@@ -771,17 +771,23 @@ void Memory::parseParameters(const ParametersMap & parameters)
 
 	int globalDescriptorStrategy = -1;
 	Parameters::parse(params, Parameters::kMemGlobalDescriptorStrategy(), globalDescriptorStrategy);
+	UDEBUG("GlobalDescriptorStrategy parsed = %d", globalDescriptorStrategy);
 	if(globalDescriptorStrategy != -1 &&
 			(_globalDescriptorExtractor==0 || (int)_globalDescriptorExtractor->getType() != globalDescriptorStrategy))
 	{
+		UDEBUG("Creating new GlobalDescriptorExtractor (strategy=%d)", globalDescriptorStrategy);
 		if(_globalDescriptorExtractor)
 		{
+			UDEBUG("Deleting existing GlobalDescriptorExtractor");
 			delete _globalDescriptorExtractor;
 		}
+		UDEBUG("About to call GlobalDescriptorExtractor::create()");
 		_globalDescriptorExtractor = GlobalDescriptorExtractor::create(parameters_);
+		UDEBUG("GlobalDescriptorExtractor::create() completed, extractor=%p", _globalDescriptorExtractor);
 	}
 	else if(_globalDescriptorExtractor)
 	{
+		UDEBUG("Parsing parameters for existing GlobalDescriptorExtractor");
 		_globalDescriptorExtractor->parseParameters(params);
 	}
 
@@ -878,12 +884,14 @@ bool Memory::update(
 	//============================================================
 	// Create a signature with the image received.
 	//============================================================
+	UDEBUG("Creating signature...");
 	Signature * signature = this->createSignature(data, pose, stats);
 	if (signature == 0)
 	{
 		UERROR("Failed to create a signature...");
 		return false;
 	}
+	UDEBUG("Signature created successfully with id=%d", signature->id());
 	if(velocity.size()==6)
 	{
 		signature->setVelocity(velocity[0], velocity[1], velocity[2], velocity[3], velocity[4], velocity[5]);
