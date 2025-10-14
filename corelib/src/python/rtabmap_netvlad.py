@@ -35,19 +35,62 @@ def init(descriptorDim):
     global sess
     global dim
     
-    dim = descriptorDim
+    try:
+        dim = descriptorDim
 
-    tf.compat.v1.disable_eager_execution()
-    tf.compat.v1.reset_default_graph()
+        tf.compat.v1.disable_eager_execution()
+        tf.compat.v1.reset_default_graph()
 
-    image_batch = tf.compat.v1.placeholder(
-        dtype=tf.float32, shape=[None, None, None, 3])
+        print("Creating TensorFlow placeholder...")
+        image_batch = tf.compat.v1.placeholder(
+            dtype=tf.float32, shape=[None, None, None, 3])
 
-    net_out = nets.vgg16NetvladPca(image_batch)
-    saver = tf.compat.v1.train.Saver()
+        print("Creating NetVLAD network...")
+        net_out = nets.vgg16NetvladPca(image_batch)
+        
+        print("Creating TensorFlow saver...")
+        saver = tf.compat.v1.train.Saver()
 
-    sess = tf.compat.v1.Session()
-    saver.restore(sess, nets.defaultCheckpoint())
+        print("Creating TensorFlow session...")
+        sess = tf.compat.v1.Session()
+        
+        checkpoint_path = nets.defaultCheckpoint()
+        print(f"Loading checkpoint from: {checkpoint_path}")
+        
+        # Check if checkpoint files exist
+        import os
+        checkpoint_files = [
+            checkpoint_path + '.index',
+            checkpoint_path + '.data-00000-of-00001',
+            checkpoint_path + '.meta'
+        ]
+        print("Checking checkpoint files:")
+        for cf in checkpoint_files:
+            exists = os.path.exists(cf)
+            print(f"  {cf}: {'✓' if exists else '✗'}")
+            if not exists:
+                print(f"    Missing file: {cf}")
+        
+        if not os.path.exists(checkpoint_path + '.index'):
+            raise FileNotFoundError(f"Checkpoint index file not found: {checkpoint_path}.index")
+            
+        print("Restoring checkpoint...")
+        saver.restore(sess, checkpoint_path)
+        
+        # Debug: Check what variables were actually loaded
+        print("Variables loaded from checkpoint:")
+        for var in tf.compat.v1.global_variables():
+            print(f"  {var.name}: {var.shape}")
+            
+        print("NetVLAD initialization successful!")
+        
+    except Exception as e:
+        print(f"NetVLAD initialization failed: {e}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        sess = None
+        raise e
 
 
 def extract(image):
