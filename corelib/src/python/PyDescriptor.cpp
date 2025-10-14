@@ -22,8 +22,17 @@ PyDescriptor::PyDescriptor(
 		pFunc_(0),
 		dim_(Parameters::defaultPyDescriptorDim())
 {
-	UDEBUG("");
-	this->parseParameters(parameters);
+	UDEBUG("PyDescriptor constructor called");
+	try {
+		this->parseParameters(parameters);
+		UDEBUG("PyDescriptor constructor completed successfully");
+	} catch (const std::exception& e) {
+		UERROR("Exception in PyDescriptor constructor: %s", e.what());
+		throw;
+	} catch (...) {
+		UERROR("Unknown exception in PyDescriptor constructor");
+		throw;
+	}
 }
 
 PyDescriptor::~PyDescriptor()
@@ -43,7 +52,7 @@ PyDescriptor::~PyDescriptor()
 
 void PyDescriptor::parseParameters(const ParametersMap & parameters)
 {
-	UDEBUG("");
+	UDEBUG("PyDescriptor::parseParameters() called");
 	std::string previousPath = path_;
 	Parameters::parse(parameters, Parameters::kPyDescriptorPath(), path_);
 	Parameters::parse(parameters, Parameters::kPyDescriptorDim(), dim_);
@@ -52,7 +61,9 @@ void PyDescriptor::parseParameters(const ParametersMap & parameters)
 	UINFO("dim = %d", dim_);
 	UTimer timer;
 
+	UDEBUG("Acquiring Python GIL...");
 	pybind11::gil_scoped_acquire acquire;
+	UDEBUG("Python GIL acquired successfully");
 
 	if(pModule_)
 	{
@@ -75,18 +86,24 @@ void PyDescriptor::parseParameters(const ParametersMap & parameters)
 		UASSERT(pFunc_ == 0);
 		if(path_.empty())
 		{
+			UDEBUG("Path is empty, returning without loading module");
 			return;
 		}
+		UDEBUG("Loading Python module from path: %s", path_.c_str());
 		std::string matcherPythonDir = UDirectory::getDir(path_);
 		if(!matcherPythonDir.empty())
 		{
+			UDEBUG("Adding Python path: %s", matcherPythonDir.c_str());
 			PyRun_SimpleString("import sys");
 			PyRun_SimpleString(uFormat("sys.path.append(\"%s\")", matcherPythonDir.c_str()).c_str());
 		}
 
+		UDEBUG("Calling _import_array()...");
 		_import_array();
+		UDEBUG("_import_array() completed");
 
 		std::string scriptName = uSplit(UFile::getName(path_), '.').front();
+		UDEBUG("Script name: %s", scriptName.c_str());
 		PyObject * pName = PyUnicode_FromString(scriptName.c_str());
 		UDEBUG("PyImport_Import() beg");
 		pModule_ = PyImport_Import(pName);
@@ -101,11 +118,13 @@ void PyDescriptor::parseParameters(const ParametersMap & parameters)
 		}
 		else
 		{
+			UDEBUG("Module imported successfully, looking for init function...");
 			PyObject * pFunc = PyObject_GetAttrString(pModule_, "init");
 			if(pFunc)
 			{
 				if(PyCallable_Check(pFunc))
 				{
+					UDEBUG("Calling init function with dim=%d", dim_);
 					PyObject * result = PyObject_CallFunction(pFunc, "i", dim_);
 
 					if(result == NULL)
@@ -113,11 +132,17 @@ void PyDescriptor::parseParameters(const ParametersMap & parameters)
 						UERROR("Call to \"init(...)\" in \"%s\" failed!", path_.c_str());
 						UERROR("%s", getPythonTraceback().c_str());
 					}
-					Py_DECREF(result);
+					else
+					{
+						UDEBUG("init function called successfully");
+						Py_DECREF(result);
+					}
 
+					UDEBUG("Looking for extract function...");
 					pFunc_ = PyObject_GetAttrString(pModule_, "extract");
 					if(pFunc_ && PyCallable_Check(pFunc_))
 					{
+						UDEBUG("extract function found and is callable");
 						// we are ready!
 					}
 					else
@@ -145,6 +170,7 @@ void PyDescriptor::parseParameters(const ParametersMap & parameters)
 			}
 		}
 	}
+	UDEBUG("PyDescriptor::parseParameters() completed");
 }
 
 GlobalDescriptor PyDescriptor::extract(
