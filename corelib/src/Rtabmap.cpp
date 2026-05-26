@@ -3181,16 +3181,16 @@ bool Rtabmap::process(
 					loopClosureVisualInliersRatio = info.inliersRatio;
 					loopClosureVisualMatches = info.matches;
 					loopClosureVisualVariance = info.variance;
-					rejectedGlobalLoopClosure = transform.isNull();
+					rejectedLoopClosure = transform.isNull();
 
-					if(rejectedGlobalLoopClosure)
+					if(rejectedLoopClosure)
 					{
 						UWARN("Rejected loop closure %d -> %d: %s",
 								iter->first, signature->id(), info.rejectedMsg.c_str());
 					}
 					else if(_maxLoopClosureDistance>0.0f && transform.getNorm() > _maxLoopClosureDistance)
 					{
-						rejectedGlobalLoopClosure = true;
+						rejectedLoopClosure = true;
 						UWARN("Rejected localization %d -> %d because distance to map (%fm) is over %s=%fm.",
 								iter->first, signature->id(), transform.getNorm(), Parameters::kRGBDMaxLoopClosureDistance().c_str(), _maxLoopClosureDistance);
 					}
