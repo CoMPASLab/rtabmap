@@ -1646,7 +1646,7 @@ void MainWindow::processOdometry(const rtabmap::OdometryEvent & odom, bool dataI
 	{
 		if(_ui->imageView_odometry->isFeaturesShown())
 		{
-			if(odom.info().type == (int)Odometry::kTypeF2M || odom.info().type == (int)Odometry::kTypeORBSLAM)
+			if(odom.info().type == (int)Odometry::kTypeF2M || odom.info().type == (int)Odometry::kTypeORBSLAM || odom.info().type == (int)Odometry::kTypeCuVSLAM)
 			{
 				if(_preferencesDialog->isOdomOnlyInliersShown())
 				{
@@ -1722,7 +1722,8 @@ void MainWindow::processOdometry(const rtabmap::OdometryEvent & odom, bool dataI
 			if( odom.info().type == (int)Odometry::kTypeF2M ||
 				odom.info().type == (int)Odometry::kTypeORBSLAM ||
 				odom.info().type == (int)Odometry::kTypeMSCKF ||
-				odom.info().type == (int)Odometry::kTypeOpenVINS)
+				odom.info().type == (int)Odometry::kTypeOpenVINS ||
+				odom.info().type == (int)Odometry::kTypeCuVSLAM)
 			{
 				if(_ui->imageView_odometry->isFeaturesShown() && !_preferencesDialog->isOdomOnlyInliersShown())
 				{
@@ -6239,7 +6240,7 @@ void MainWindow::stopDetection()
 	if(_odomThread)
 	{
 		_ui->actionReset_Odometry->setEnabled(false);
-		_odomThread->kill();
+		_odomThread->join(true); // kill and wait — prevents use-after-free in odometry destructor
 	}
 
 	// delete the processes

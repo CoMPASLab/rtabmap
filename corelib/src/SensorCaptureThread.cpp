@@ -826,8 +826,25 @@ void SensorCaptureThread::postUpdate(SensorData * dataPtr, SensorCaptureInfo * i
 			std::vector<cv::Point> topLeftCorners(2, cv::Point(0,0));
 			std::vector<cv::UMat> images;
 			std::vector<cv::UMat> masks(2, cv::UMat(data.imageRaw().size(), CV_8UC1,  cv::Scalar(255)));
-			images.push_back(data.imageRaw().getUMat(cv::ACCESS_READ));
-			images.push_back(data.rightRaw().getUMat(cv::ACCESS_READ));
+			cv::UMat leftFeed = data.imageRaw().getUMat(cv::ACCESS_READ);
+			cv::UMat rightFeed = data.rightRaw().getUMat(cv::ACCESS_READ);
+			if(leftFeed.channels() != rightFeed.channels())
+			{
+				if(leftFeed.channels() == 1)
+				{
+					cv::UMat tmp;
+					cv::cvtColor(leftFeed, tmp, cv::COLOR_GRAY2BGR);
+					leftFeed = tmp;
+				}
+				else
+				{
+					cv::UMat tmp;
+					cv::cvtColor(rightFeed, tmp, cv::COLOR_GRAY2BGR);
+					rightFeed = tmp;
+				}
+			}
+			images.push_back(leftFeed);
+			images.push_back(rightFeed);
 			compensator->feed(topLeftCorners, images, masks);
 			cv::Mat imgLeft = data.imageRaw().clone();
 			compensator->apply(0, cv::Point(0,0), imgLeft, masks[0]);

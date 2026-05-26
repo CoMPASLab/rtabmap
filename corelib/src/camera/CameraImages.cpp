@@ -128,7 +128,7 @@ bool CameraImages::init(const std::string & calibrationFolder, const std::string
 	}
 	if(!_path.empty())
 	{
-		_dir = new UDirectory(_path, "jpg ppm png bmp pnm tiff pgm");
+		_dir = new UDirectory(_path, "jpg ppm png bmp pnm tiff tif pgm");
 		if(_path[_path.size()-1] != '\\' && _path[_path.size()-1] != '/')
 		{
 			_path.append("/");

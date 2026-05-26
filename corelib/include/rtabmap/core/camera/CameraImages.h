@@ -54,6 +54,7 @@ public:
 	std::string getPath() const {return _path;}
 	unsigned int imagesCount() const;
 	std::vector<std::string> filenames() const;
+	const std::list<double> & stamps() const { return _stamps; }
 	bool isImagesRectified() const {return _rectifyImages;}
 	int getBayerMode() const {return _bayerMode;}
 	const CameraModel & cameraModel() const {return _model;}
@@ -71,6 +72,8 @@ public:
 		_timestampsPath=filePath;
 		_syncImageRateWithStamps = syncImageRateWithStamps;
 	}
+	bool isFilenamesAreTimestamps() const { return _filenamesAreTimestamps; }
+	bool isSyncImageRateWithStamps() const { return _syncImageRateWithStamps; }
 
 	void setConfigForEachFrame(bool value)
 	{

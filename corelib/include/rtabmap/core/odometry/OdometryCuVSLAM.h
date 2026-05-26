@@ -35,8 +35,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <array>
 
 #ifdef RTABMAP_CUVSLAM
-#include <cuvslam.h>
-#include <ground_constraint.h>
+#include <cuvslam/cuvslam2.h>
+#include <cuvslam/ground_constraint2.h>
 #include <cuda_runtime.h>
 #endif
 
@@ -57,12 +57,9 @@ private:
 
 private:
 #ifdef RTABMAP_CUVSLAM
-	CUVSLAM_TrackerHandle cuvslam_handle_;
-	CUVSLAM_GroundConstraintHandle ground_constraint_handle_;
+	std::unique_ptr<cuvslam::Odometry> odometry_;
+	std::unique_ptr<cuvslam::GroundConstraint> ground_constraint_;
 
-	std::vector<CUVSLAM_Camera> cuvslam_cameras_;
-	std::vector<std::array<float, 12>> intrinsics_;
-	
 	// State tracking
 	bool initialized_;
 	bool lost_;
@@ -73,24 +70,16 @@ private:
 	double last_timestamp_;
 
 	// Configuration Thresholds
-	double velocity_ratio_threshold_high_ = 1.5;			// The maximum velocity ratio of guess / estimated velocity needed to detect lost state.
-	double velocity_ratio_threshold_low_ = 0.5;				// The minimum velocity ratio of guess / estimated velocity needed to detect lost state.
-	double velocity_difference_threshold_ = 0.1;			// The maximum velocity difference between the guess and the estimated velocity needed to detect lost state.
-	double zero_estimated_velocity_threshold_ = 0.00001;	// The minimum cuVSLAM estimated velocity needed to detect lost state.
-	double min_landmarks_threshold_ = 30; 					// The minimum number of landmarks needed to start tracking after an initialization.
-	
-	// Forward cuVLSAM covariance directly to RTAB-Map.
-	// When true this disables covariance based lost detection.
-	bool use_raw_covariance_  = false;
+	double min_landmarks_threshold_ = 30; 	// The minimum number of landmarks needed to start tracking after an initialization.
 
-	//visualization
-	std::vector<CUVSLAM_Observation> observations_;
-	std::vector<CUVSLAM_Landmark> landmarks_;
-	
+	// Forward cuVSLAM covariance directly to RTAB-Map.
+	// When true this disables covariance based lost detection.
+	bool use_raw_covariance_ = false;
+
 	// GPU memory management
-	std::vector<uint8_t *> gpu_left_image_data_; // pointers to all gpu images
+	std::vector<uint8_t *> gpu_left_image_data_;
 	std::vector<uint8_t *> gpu_right_image_data_;
-	std::vector<size_t> gpu_left_image_sizes_; // size of one image
+	std::vector<size_t> gpu_left_image_sizes_;
 	std::vector<size_t> gpu_right_image_sizes_;
 	cudaStream_t cuda_stream_;
 #endif

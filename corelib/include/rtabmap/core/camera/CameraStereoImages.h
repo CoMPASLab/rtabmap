@@ -31,6 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "rtabmap/core/StereoCameraModel.h"
 #include "rtabmap/core/Version.h"
+#include <string>
+#include <vector>
 
 namespace rtabmap
 {
@@ -62,8 +64,8 @@ public:
 	virtual bool isCalibrated() const;
 	virtual std::string getSerial() const;
 
-	virtual void setStartIndex(int index) {CameraImages::setStartIndex(index);camera2_->setStartIndex(index);} // negative means last
-	virtual void setMaxFrames(int value) {CameraImages::setMaxFrames(value);camera2_->setMaxFrames(value);}
+	virtual void setStartIndex(int index) {CameraImages::setStartIndex(index);if(camera2_)camera2_->setStartIndex(index);} // negative means last
+	virtual void setMaxFrames(int value) {CameraImages::setMaxFrames(value);if(camera2_)camera2_->setMaxFrames(value);}
 
 protected:
 	virtual SensorData captureImage(SensorCaptureInfo * info = 0);
@@ -72,6 +74,12 @@ private:
 	CameraImages * camera2_;
 	StereoCameraModel stereoModel_;
 	bool rightGrayScale_;
+
+	// Populated during init() when both sides have filename timestamps.
+	// Enables nearest-timestamp matching so left/right counts need not be equal.
+	std::vector<double> rightStamps_;        // sorted right timestamps (parallel to rightFilenames_)
+	std::vector<std::string> rightFilenames_; // bare right filenames
+	std::string rightPath_;                   // right directory path (trailing separator included)
 };
 
 

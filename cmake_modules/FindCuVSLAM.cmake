@@ -1,60 +1,105 @@
 # - Find cuVSLAM library (https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_visual_slam)
 #
-#  CUVSLAM_ROOT_DIR environment variable can be set to find the library.
+#  CUVSLAM_ROOT / CUVSLAM_ROOT_DIR environment variables can point to either
+#  the cuVSLAM source directory (containing libs/ and build/) or the build
+#  directory directly.
 #
 # It sets the following variables:
 #  CUVSLAM_FOUND         - Set to false, or undefined, if cuVSLAM isn't found.
-#  CUVSLAM_VERSION       - The version of cuVSLAM found (e.g., "14.0.0").
-#  CUVSLAM_INCLUDE_DIRS  - The cuVSLAM include directory.
+#  CUVSLAM_VERSION       - The version of cuVSLAM found (e.g., "15.0.0").
+#  CUVSLAM_INCLUDE_DIRS  - The cuVSLAM include directories.
 #  CUVSLAM_LIBRARIES     - The cuVSLAM library to link against.
 
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-find_path(CUVSLAM_INCLUDE_DIRS 
-    NAMES cuvslam.h
-    PATHS
-        /usr/include
-        /usr/local/include
-        /opt/cuvslam/include
-        /opt/ros/humble/share/isaac_ros_nitros/cuvslam/include
+# cuVSLAM v15 headers live under a cuvslam/ subdirectory.
+# find_path returns the parent directory (the include root).
+find_path(CUVSLAM_INCLUDE_DIR
+    NAMES cuvslam/cuvslam2.h
+    HINTS
         $ENV{CUVSLAM_ROOT}/include
+        $ENV{CUVSLAM_ROOT}/libs          # source-tree case: libs/cuvslam/cuvslam2.h
         $ENV{CUVSLAM_ROOT_DIR}/include
-)
-
-find_library(CUVSLAM_LIBRARY 
-    NAMES cuvslam
+        $ENV{CUVSLAM_ROOT_DIR}/libs
     PATHS
-        /usr/lib
-        /usr/local/lib
-        /opt/cuvslam/lib
-        /opt/ros/humble/share/isaac_ros_nitros/cuvslam/lib
-        $ENV{CUVSLAM_ROOT}/lib
-        $ENV{CUVSLAM_ROOT_DIR}/lib
+        /opt/cuvslam/include
+        /usr/local/include
+        /usr/include
 )
 
-if(CUVSLAM_INCLUDE_DIRS AND CUVSLAM_LIBRARY)
-    # Extract version from cuvslam.h header
-    file(STRINGS "${CUVSLAM_INCLUDE_DIRS}/cuvslam.h" CUVSLAM_VERSION_MAJOR_LINE 
-         REGEX "^#define CUVSLAM_API_VERSION_MAJOR")
-    file(STRINGS "${CUVSLAM_INCLUDE_DIRS}/cuvslam.h" CUVSLAM_VERSION_MINOR_LINE 
-         REGEX "^#define CUVSLAM_API_VERSION_MINOR")
-    
-    if(CUVSLAM_VERSION_MAJOR_LINE AND CUVSLAM_VERSION_MINOR_LINE)
-        string(REGEX MATCH "[0-9]+" CUVSLAM_VERSION_MAJOR "${CUVSLAM_VERSION_MAJOR_LINE}")
-        string(REGEX MATCH "[0-9]+" CUVSLAM_VERSION_MINOR "${CUVSLAM_VERSION_MINOR_LINE}")
-        set(CUVSLAM_VERSION "${CUVSLAM_VERSION_MAJOR}.${CUVSLAM_VERSION_MINOR}.0")
+find_library(CUVSLAM_LIBRARY
+    NAMES cuvslam
+    HINTS
+        $ENV{CUVSLAM_ROOT}/lib
+        $ENV{CUVSLAM_ROOT}/bin           # cuVSLAM build output goes to bin/
+        $ENV{CUVSLAM_ROOT}/build/bin     # source-tree case: build/bin/libcuvslam.so
+        $ENV{CUVSLAM_ROOT_DIR}/lib
+        $ENV{CUVSLAM_ROOT_DIR}/bin
+        $ENV{CUVSLAM_ROOT_DIR}/build/bin
+    PATHS
+        /opt/cuvslam/lib
+        /usr/local/lib
+        /usr/lib
+)
+
+# Locate version.h – it is generated during the build so it may be in a
+# separate generated/ directory rather than alongside the other headers.
+set(CUVSLAM_VERSION_H_PATH "")
+if(CUVSLAM_INCLUDE_DIR)
+    foreach(_vh
+            "${CUVSLAM_INCLUDE_DIR}/cuvslam/version.h"
+            "${CUVSLAM_INCLUDE_DIR}/version.h")
+        if(EXISTS "${_vh}")
+            set(CUVSLAM_VERSION_H_PATH "${_vh}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+if(NOT CUVSLAM_VERSION_H_PATH AND CUVSLAM_LIBRARY)
+    get_filename_component(_lib_dir "${CUVSLAM_LIBRARY}" DIRECTORY)
+    foreach(_vh
+            "${_lib_dir}/../generated/version.h"
+            "${_lib_dir}/../../generated/version.h")
+        get_filename_component(_vh_abs "${_vh}" ABSOLUTE)
+        if(EXISTS "${_vh_abs}")
+            set(CUVSLAM_VERSION_H_PATH "${_vh_abs}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+if(CUVSLAM_INCLUDE_DIR AND CUVSLAM_LIBRARY)
+    # Extract version from version.h (CUVSLAM_API_VERSION_MAJOR / _MINOR defines)
+    if(CUVSLAM_VERSION_H_PATH)
+        file(STRINGS "${CUVSLAM_VERSION_H_PATH}" CUVSLAM_VERSION_MAJOR_LINE
+             REGEX "^#define CUVSLAM_API_VERSION_MAJOR")
+        file(STRINGS "${CUVSLAM_VERSION_H_PATH}" CUVSLAM_VERSION_MINOR_LINE
+             REGEX "^#define CUVSLAM_API_VERSION_MINOR")
+        if(CUVSLAM_VERSION_MAJOR_LINE AND CUVSLAM_VERSION_MINOR_LINE)
+            string(REGEX MATCH "[0-9]+" CUVSLAM_VERSION_MAJOR "${CUVSLAM_VERSION_MAJOR_LINE}")
+            string(REGEX MATCH "[0-9]+" CUVSLAM_VERSION_MINOR "${CUVSLAM_VERSION_MINOR_LINE}")
+            set(CUVSLAM_VERSION "${CUVSLAM_VERSION_MAJOR}.${CUVSLAM_VERSION_MINOR}.0")
+        endif()
     endif()
-    
-    set(CUVSLAM_LIBRARIES 
-        ${CUVSLAM_LIBRARY} 
+
+    set(CUVSLAM_INCLUDE_DIRS ${CUVSLAM_INCLUDE_DIR})
+
+    # Add the generated directory (for version.h) when it is separate from the main include dir
+    if(CUVSLAM_VERSION_H_PATH)
+        get_filename_component(_gen_dir "${CUVSLAM_VERSION_H_PATH}" DIRECTORY)
+        if(NOT _gen_dir STREQUAL "${CUVSLAM_INCLUDE_DIR}"
+           AND NOT _gen_dir STREQUAL "${CUVSLAM_INCLUDE_DIR}/cuvslam")
+            list(APPEND CUVSLAM_INCLUDE_DIRS "${_gen_dir}")
+        endif()
+    endif()
+
+    list(APPEND CUVSLAM_INCLUDE_DIRS ${CUDA_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR})
+
+    set(CUVSLAM_LIBRARIES
+        ${CUVSLAM_LIBRARY}
         ${CUDA_LIBRARIES}
-        # Eigen3 is header-only, so we don't need to link to it
-    )
-    set(CUVSLAM_INCLUDE_DIRS 
-        ${CUVSLAM_INCLUDE_DIRS} 
-        ${CUDA_INCLUDE_DIRS} 
-        ${EIGEN3_INCLUDE_DIR}
     )
 endif()
 
@@ -102,4 +147,4 @@ if(CUVSLAM_FOUND)
     endif()
 endif()
 
-mark_as_advanced(CUVSLAM_INCLUDE_DIRS CUVSLAM_LIBRARY)
+mark_as_advanced(CUVSLAM_INCLUDE_DIR CUVSLAM_LIBRARY)
