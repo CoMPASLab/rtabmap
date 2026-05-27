@@ -388,7 +388,7 @@ std::map<int, Transform> OptimizerGTSAM::optimize(
 			{
 				if(iter->second.type() == Link::kPoseZPrior)
 				{
-					noiseModel::Diagonal::shared_ptr model = noiseModel::Diagonal::Precisions(Vector3(1e-3, 1e-3, 1e-3));
+					gtsam::noiseModel::Diagonal::shared_ptr model = gtsam::noiseModel::Diagonal::Precisions(gtsam::Vector3(1e-3, 1e-3, 1e-3));
 					// X and Y can be anything because ZFactor only uses Z component
 					graph.add(ZFactor<gtsam::Pose3>(id1, gtsam::Point3(0, 0, iter->second.transform().z()), model));
 				}
