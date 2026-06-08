@@ -15,7 +15,6 @@
 #
 
 import sys
-import os
 import numpy as np
 
 if not hasattr(sys, 'argv'):
@@ -29,22 +28,20 @@ device = None
 
 # DINOv2 backbone expects ImageNet-normalized inputs
 _MEAN = [0.485, 0.456, 0.406]
-_STD  = [0.229, 0.224, 0.225]
+_STD = [0.229, 0.224, 0.225]
 
 
 def init(descriptorDim):
     global model, device
     print("MegaLoc python init()")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = torch.hub.load("gmberton/MegaLoc", "get_trained_model")
+    model = torch.hub.load("gmberton/MegaLoc", "get_trained_model", trust_repo=True)
     model = model.eval().to(device)
     print(f"MegaLoc initialized on {device}, descriptor dim={descriptorDim}")
 
 
 def extract(image):
     # image is a HxWxC uint8 numpy array in BGR (OpenCV convention)
-    global model, device
-
     if image.ndim == 2 or image.shape[2] == 1:
         gray = image.squeeze() if image.ndim == 3 else image
         rgb = np.stack([gray, gray, gray], axis=2)
