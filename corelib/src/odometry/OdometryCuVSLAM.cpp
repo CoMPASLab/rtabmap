@@ -326,9 +326,9 @@ Transform OdometryCuVSLAM::computeTransform(
         return Transform();
     }
 
-    // cuVSLAM v15 does not accept an external predicted pose; the internal motion model is used instead.
+    // cuVSLAM does not accept an external predicted pose; the internal motion model is used instead.
     if(!guess.isNull()) {
-        UDEBUG("External guess provided but ignored: cuVSLAM v15 uses internal motion model only.");
+        UDEBUG("External guess provided but ignored: cuVSLAM uses internal motion model only.");
     }
 
     cuvslam::PoseEstimate pose_estimate;

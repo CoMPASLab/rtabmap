@@ -13,7 +13,7 @@
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# cuVSLAM v15 headers live under a cuvslam/ subdirectory.
+# cuVSLAM headers live under a cuvslam/ subdirectory.
 # find_path returns the parent directory (the include root).
 find_path(CUVSLAM_INCLUDE_DIR
     NAMES cuvslam/cuvslam2.h
