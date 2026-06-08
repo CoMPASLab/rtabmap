@@ -51,6 +51,7 @@ def extract(image):
 
     # HxWx3 uint8  ->  3xHxW float32 in [0, 1]
     tensor = torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
+    tensor = TF.resize(tensor, [320, 320], antialias=True)
     tensor = TF.normalize(tensor, mean=_MEAN, std=_STD)
     tensor = tensor.unsqueeze(0).to(device)  # 1x3xHxW
 
