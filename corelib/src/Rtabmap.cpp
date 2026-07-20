@@ -3197,6 +3197,8 @@ bool Rtabmap::process(
 					else
 					{
 						transform = transform.inverse();
+						_loopClosureHypothesis.first = iter->first; // the transform was computed against this candidate, not necessarily the original highest hypothesis
+						break; // stop at the first candidate that verifies successfully
 					}
 				}
 			}
