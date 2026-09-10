@@ -86,6 +86,12 @@ const rtabmap::Transform cuvslam_pose_optical(
 // Optical Frame    (x-right, y-down, z-forward)
 const rtabmap::Transform optical_pose_cuvslam = cuvslam_pose_optical.inverse();
 
+// Number of consecutive odometry_->Track() exceptions (e.g. GPU/CUDA-level corruption)
+// before forcing a full tracker teardown/reinitialization as a last-resort self-heal.
+// Ordinary tracking loss (nullopt pose / bad covariance) does NOT count against this and
+// does not trigger a teardown: the cuVSLAM SDK is designed to recover internally as long
+// as Track() keeps being called every frame.
+const int kMaxConsecutiveTrackExceptions = 5;
 
 // ============================================================================
 // Forward Declarations
@@ -160,9 +166,9 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     ,
     odometry_(nullptr),
     ground_constraint_(nullptr),
-    initialized_(false),
-    lost_(false),
-    tracking_(false),
+    warmedUp_(false),
+    wasLost_(false),
+    consecutiveExceptions_(0),
     planar_constraints_(false),
     multicam_mode_(0),
     previous_pose_(Transform::getIdentity()),
@@ -235,9 +241,9 @@ void OdometryCuVSLAM::cleanupCuVSLAMResources()
 
     gpu_left_image_sizes_.clear();
     gpu_right_image_sizes_.clear();
-    initialized_ = false;
-    lost_ = false;
-    tracking_ = false;
+    warmedUp_ = false;
+    wasLost_ = false;
+    consecutiveExceptions_ = 0;
     previous_pose_ = Transform::getIdentity();
     last_timestamp_ = -1.0;
 #endif
@@ -251,19 +257,9 @@ Transform OdometryCuVSLAM::computeTransform(
 #ifdef RTABMAP_CUVSLAM
     UTimer timer;
 
-    UDEBUG("=== computeTransform ENTRY === lost_=%s, tracking_=%s, initialized_=%s",
-          lost_ ? "true" : "false",
-          tracking_ ? "true" : "false",
-          initialized_ ? "true" : "false");
-
-    if(lost_ && tracking_) {
-        UDEBUG("EARLY EXIT: lost_ && tracking_ is true, returning null");
-        if(info) {
-            info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
-            info->timeEstimation = timer.ticks();
-        }
-        return Transform();
-    }
+    UDEBUG("=== computeTransform ENTRY === wasLost_=%s, warmedUp_=%s",
+          wasLost_ ? "true" : "false",
+          warmedUp_ ? "true" : "false");
 
     if(data.imageRaw().empty() || data.rightRaw().empty())
     {
@@ -279,7 +275,7 @@ Transform OdometryCuVSLAM::computeTransform(
         return Transform();
     }
 
-    if(!initialized_)
+    if(!odometry_)
     {
         if(!initializeCuVSLAM(
             data,
@@ -322,7 +318,7 @@ Transform OdometryCuVSLAM::computeTransform(
         return Transform();
     }
     if(!odometry_) {
-        UERROR("cuVSLAM tracker is null! initialized_: %s", initialized_ ? "true" : "false");
+        UERROR("cuVSLAM tracker is null after initialization attempt!");
         return Transform();
     }
 
@@ -334,20 +330,29 @@ Transform OdometryCuVSLAM::computeTransform(
     cuvslam::PoseEstimate pose_estimate;
     try {
         pose_estimate = odometry_->Track(cuvslam_image_objects);
+        consecutiveExceptions_ = 0;
     } catch (const std::exception & e) {
-        UERROR("cuVSLAM Track() threw exception: %s", e.what());
+        ++consecutiveExceptions_;
+        UERROR("cuVSLAM Track() threw exception (%d consecutive): %s", consecutiveExceptions_, e.what());
+        wasLost_ = true;
         last_timestamp_ = data.stamp();
         if(info) {
             info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
             info->timeEstimation = timer.ticks();
+        }
+        if(consecutiveExceptions_ >= kMaxConsecutiveTrackExceptions)
+        {
+            UERROR("cuVSLAM Track() failed %d times in a row; forcing full tracker reinitialization.",
+                   consecutiveExceptions_);
+            cleanupCuVSLAMResources();
         }
         return Transform();
     }
 
     if(!pose_estimate.world_from_rig.has_value())
     {
-        UWARN("cuVSLAM tracking lost (no pose estimate returned)");
-        lost_ = true;
+        UWARN("cuVSLAM tracking lost (no pose estimate returned); will keep tracking to let cuVSLAM recover.");
+        wasLost_ = true;
         last_timestamp_ = data.stamp();
         if(info) {
             info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
@@ -377,7 +382,7 @@ Transform OdometryCuVSLAM::computeTransform(
         {
             if(!use_raw_covariance_) {
                 UWARN("Covariance diagonal[%d]=%.8f is invalid; marking as lost.", i, diag_val);
-                lost_ = true;
+                wasLost_ = true;
                 last_timestamp_ = data.stamp();
                 if(info) {
                     info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
@@ -390,14 +395,45 @@ Transform OdometryCuVSLAM::computeTransform(
 
     cv::Mat covMat = convertCuVSLAMCovariance(covariance_copy.data(), use_raw_covariance_);
 
+    // Track whether we're recovering from a loss BEFORE the ground constraint / suppression
+    // logic below clears wasLost_ for this frame.
+    bool wasRecovering = wasLost_;
+
     // Apply ground constraint
     cuvslam::Pose constrained_pose = pwc.pose;
     if(planar_constraints_ && ground_constraint_) {
+        if(wasRecovering)
+        {
+            // cuVSLAM's absolute-pose frame was just reset internally after a tracking
+            // loss (the SDK re-bootstraps from Identity on recovery); the ground
+            // constraint's integrated world-frame reference is stale and must be rebuilt
+            // against the new coordinate frame, the same way it was originally built.
+            try {
+                cuvslam::Pose identity_pose;
+                ground_constraint_ = std::make_unique<cuvslam::GroundConstraint>(
+                    identity_pose, identity_pose, identity_pose);
+            } catch (const std::exception & e) {
+                UERROR("Failed to reinitialize GroundConstraint after recovery: %s", e.what());
+                wasLost_ = true;
+                last_timestamp_ = data.stamp();
+                if(info) {
+                    info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
+                    info->timeEstimation = timer.ticks();
+                }
+                return Transform();
+            }
+        }
         try {
             ground_constraint_->AddNextPose(constrained_pose);
             constrained_pose = ground_constraint_->GetPoseOnGround();
         } catch (const std::exception & e) {
             UERROR("Ground constraint failed: %s", e.what());
+            wasLost_ = true;
+            last_timestamp_ = data.stamp();
+            if(info) {
+                info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
+                info->timeEstimation = timer.ticks();
+            }
             return Transform();
         }
     }
@@ -406,24 +442,44 @@ Transform OdometryCuVSLAM::computeTransform(
     Transform current_pose = FromcuVSLAMPose(constrained_pose);
     current_pose = canonical_pose_cuvslam * current_pose * cuvslam_pose_canonical;
     UASSERT(!previous_pose_.isNull());
-    Transform transform = previous_pose_.inverse() * current_pose;
 
-    tracking_ = true;
-
-    if(info)
-    {
-        info->reg.covariance = covMat;
-        info->timeEstimation = timer.ticks();
-    }
-
-    // Extract 3D landmarks for visualization and initialization check
+    // Extract 3D landmarks for visualization and warm-up check
     std::vector<cuvslam::Landmark> landmarks;
     try {
         landmarks = odometry_->GetLastLandmarks();
     } catch (const std::exception & e) {
-        UDEBUG("GetLastLandmarks() failed: %s", e.what());
+        UWARN("GetLastLandmarks() failed: %s", e.what());
     }
     int landmarks_num = static_cast<int>(landmarks.size());
+
+    // Suppress this frame's motion estimate (return a null Transform, which the base
+    // Odometry class already treats as "no odometry this cycle") when:
+    //  - we're recovering from a loss: cuVSLAM reset its coordinate frame internally, so
+    //    a delta against the stale previous_pose_ would be a bogus jump; or
+    //  - we haven't yet accumulated enough landmarks since the last (re)initialization.
+    // previous_pose_ is still advanced below so the next frame's delta is correct, and no
+    // destructive teardown of the tracker is needed in either case.
+    bool suppress = wasRecovering || (!warmedUp_ && landmarks_num < min_landmarks_threshold_);
+    Transform transform = suppress ? Transform() : (previous_pose_.inverse() * current_pose);
+
+    if(wasRecovering)
+    {
+        UWARN("cuVSLAM recovered after tracking loss; the SDK reset its internal coordinate "
+              "frame, so odometry is being re-anchored (this frame reports no motion).");
+    }
+
+    previous_pose_ = current_pose;
+    wasLost_ = false;
+    if(landmarks_num >= min_landmarks_threshold_)
+    {
+        warmedUp_ = true;
+    }
+
+    if(info)
+    {
+        info->reg.covariance = suppress ? cv::Mat::eye(6, 6, CV_64FC1) * 9999.0 : covMat;
+        info->timeEstimation = timer.ticks();
+    }
 
     if(info)
     {
@@ -446,7 +502,7 @@ Transform OdometryCuVSLAM::computeTransform(
             try {
                 cam_observations = odometry_->GetLastObservations((int)(cam_idx * 2));
             } catch (const std::exception & e) {
-                UDEBUG("GetLastObservations(%d) failed: %s", (int)(cam_idx * 2), e.what());
+                UWARN("GetLastObservations(%d) failed: %s", (int)(cam_idx * 2), e.what());
                 continue;
             }
             float x_offset = (float)(cam_idx * image_width);
@@ -465,10 +521,22 @@ Transform OdometryCuVSLAM::computeTransform(
             }
         }
         info->features = (int)info->words.size();
-        info->reg.inliers = (int)info->reg.inliersIDs.size();
+        // Note: info->reg.inliers is intentionally NOT set to inliersIDs.size() here.
+        // inliersIDs (used above only for GUI green/yellow color-coding) counts
+        // observations whose ID appears in GetLastLandmarks(), which cuVSLAM only
+        // refreshes on keyframe insertion (feature-survival/time based, not motion
+        // based). When the platform is stationary, keyframes stop firing for long
+        // stretches, so that count decays toward zero as track IDs churn even though
+        // tracking itself is fine -- it measures cache staleness, not tracking health.
+        // The actual per-frame tracking confidence is already reported via covMat
+        // (derived from cuVSLAM's live pose-solve covariance); "quality" here just
+        // reflects how many points are being reliably tracked right now.
+        info->reg.inliers = info->features;
 
-        // Populate localMap with 3D landmark positions in world frame.
-        if(!landmarks.empty())
+        // Populate localMap with 3D landmark positions in world frame. Skipped when the
+        // transform is suppressed: right after a recovery, `transform` is null and there is
+        // no valid absolute pose to project these (freshly re-anchored) landmarks into.
+        if(!suppress && !landmarks.empty())
         {
             Transform absolute_pose = this->getPose() * transform;
             for(const auto & landmark : landmarks)
@@ -484,21 +552,6 @@ Transform OdometryCuVSLAM::computeTransform(
         info->localMapSize = (int)landmarks.size();
     }
 
-    if(landmarks_num < min_landmarks_threshold_ && !initialized_) {
-        if(info) {
-            info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
-            info->timeEstimation = timer.ticks();
-        }
-        cleanupCuVSLAMResources();
-        lost_ = true;
-        tracking_ = false;
-        initialized_ = false;
-        return Transform();
-    } else {
-        initialized_ = true;
-    }
-
-    previous_pose_ = current_pose;
     last_timestamp_ = data.stamp();
     UINFO("Odom update time = %fs lost=%s inliers=%d features=%d variance:lin=%f ang=%f local_map=%d",
         timer.elapsed(),

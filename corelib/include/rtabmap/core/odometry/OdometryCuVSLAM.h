@@ -61,16 +61,20 @@ private:
 	std::unique_ptr<cuvslam::GroundConstraint> ground_constraint_;
 
 	// State tracking
-	bool initialized_;
-	bool lost_;
-	bool tracking_;
+	bool warmedUp_;              // true once landmarks_num >= min_landmarks_threshold_ has been
+	                              // observed since the last full teardown
+	bool wasLost_;                // true if the immediately-preceding frame failed
+	                              // (exception/nullopt/bad covariance); used only to edge-detect
+	                              // the recovery transition on the next successful frame
+	int consecutiveExceptions_;  // consecutive Track() exceptions since the last success or
+	                              // full teardown; bounds the exception-storm self-heal
 	bool planar_constraints_;
 	int multicam_mode_;
 	Transform previous_pose_;
 	double last_timestamp_;
 
 	// Configuration Thresholds
-	double min_landmarks_threshold_ = 30; 	// The minimum number of landmarks needed to start tracking after an initialization.
+	int min_landmarks_threshold_ = 30; 	// The minimum number of landmarks needed to start tracking after an initialization.
 
 	// Forward cuVSLAM covariance directly to RTAB-Map.
 	// When true this disables covariance based lost detection.
