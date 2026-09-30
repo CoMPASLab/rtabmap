@@ -63,9 +63,10 @@ private:
 	// State tracking
 	bool warmedUp_;              // true once landmarks_num >= min_landmarks_threshold_ has been
 	                              // observed since the last full teardown
-	bool wasLost_;                // true if the immediately-preceding frame failed
-	                              // (exception/nullopt/bad covariance); used only to edge-detect
-	                              // the recovery transition on the next successful frame
+	bool wasLost_;                // true if the immediately-preceding frame lost the SDK's
+	                              // coordinate frame (exception/nullopt/ground constraint); used
+	                              // only to edge-detect the recovery transition. Frames rejected
+	                              // for large covariance do not set it (tracking is continuous).
 	int consecutiveExceptions_;  // consecutive Track() exceptions since the last success or
 	                              // full teardown; bounds the exception-storm self-heal
 	bool planar_constraints_;

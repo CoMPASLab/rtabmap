@@ -381,8 +381,11 @@ Transform OdometryCuVSLAM::computeTransform(
         if(diag_val > 0.1f)
         {
             if(!use_raw_covariance_) {
-                UWARN("Covariance diagonal[%d]=%.8f is invalid; marking as lost.", i, diag_val);
-                wasLost_ = true;
+                // Rejected by this wrapper, not lost by the SDK: cuVSLAM keeps tracking in the
+                // same coordinate frame, so wasLost_ is left unset and previous_pose_ keeps the
+                // last accepted pose. The next accepted frame then reports the whole motion
+                // since that pose instead of being re-anchored, which would discard it.
+                UWARN("Covariance diagonal[%d]=%.8f is too large; skipping this frame.", i, diag_val);
                 last_timestamp_ = data.stamp();
                 if(info) {
                     info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
