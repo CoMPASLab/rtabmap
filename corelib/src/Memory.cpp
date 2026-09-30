@@ -6724,8 +6724,10 @@ Signature * Memory::createSignature(const SensorData & inputData, const Transfor
         int previousId = _signatures.rbegin()->second->id();
         for (const auto & constraint : data.arbitraryPoseConstraints())
         {
+            // The constraint is the motion previous -> current; a link from the new node to the
+            // previous one carries its inverse, as for neighbor links.
             s->addLink(Link(s->id(), previousId, Link::kArbitraryFromTo,
-                            constraint.pose(),
+                            constraint.pose().inverse(),
                             constraint.covariance().inv()));
             float x, y, z, roll, pitch, yaw;
             constraint.pose().getTranslationAndEulerAngles(x, y, z, roll, pitch, yaw);
