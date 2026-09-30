@@ -177,7 +177,9 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     gpu_right_image_data_(),
     gpu_left_image_sizes_(),
     gpu_right_image_sizes_(),
-    cuda_stream_(nullptr)
+    cuda_stream_(nullptr),
+    max_rotation_variance_(Parameters::defaultOdomCuVSLAMMaxRotationVariance()),
+    max_translation_variance_(Parameters::defaultOdomCuVSLAMMaxTranslationVariance())
 #endif
 {
 #ifdef RTABMAP_CUVSLAM
@@ -185,6 +187,10 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     Parameters::parse(parameters, Parameters::kOdomCuVSLAMMulticamMode(), multicam_mode_);
     UASSERT(multicam_mode_ >= 0 && multicam_mode_ <= 2);
     UINFO("%s=%d", Parameters::kOdomCuVSLAMMulticamMode().c_str(), multicam_mode_);
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMMaxRotationVariance(), max_rotation_variance_);
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMMaxTranslationVariance(), max_translation_variance_);
+    UINFO("%s=%f %s=%f", Parameters::kOdomCuVSLAMMaxRotationVariance().c_str(), max_rotation_variance_,
+          Parameters::kOdomCuVSLAMMaxTranslationVariance().c_str(), max_translation_variance_);
     // Warm up GPU and create CUDA context before tracker initialization
     cuvslam::WarmUpGPU();
 #endif
@@ -365,20 +371,24 @@ Transform OdometryCuVSLAM::computeTransform(
 
     // Validate covariance
     std::array<float, 36> covariance_copy = pwc.covariance;
+    // cuVSLAM order is (Rx, Ry, Rz, x, y, z): rotation variances in rad^2, translation in m^2.
     for(int i = 0; i < 6; i++)
     {
         float & diag_val = covariance_copy[i*6+i];
 
+        bool invalid = false;
         if(!std::isfinite(diag_val) || diag_val < 0.0f)
         {
             diag_val = 9999.0f;
+            invalid = true;
         }
         // Tracker returns near-zero covariance before motion begins; clamp it.
         if(std::abs(diag_val) < 1e-7f)
         {
             diag_val = 0.0001f;
         }
-        if(diag_val > 0.1f)
+        const float limit = i < 3 ? max_rotation_variance_ : max_translation_variance_;
+        if(invalid || (limit > 0.0f && diag_val > limit))
         {
             if(!use_raw_covariance_) {
                 // Rejected by this wrapper, not lost by the SDK: cuVSLAM keeps tracking in the

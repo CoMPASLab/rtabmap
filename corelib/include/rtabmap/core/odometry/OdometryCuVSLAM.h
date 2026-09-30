@@ -76,6 +76,8 @@ private:
 
 	// Configuration Thresholds
 	int min_landmarks_threshold_ = 30; 	// The minimum number of landmarks needed to start tracking after an initialization.
+	float max_rotation_variance_;       // OdomCuVSLAM/MaxRotationVariance (rad^2), 0 = no limit
+	float max_translation_variance_;    // OdomCuVSLAM/MaxTranslationVariance (m^2), 0 = no limit
 
 	// Forward cuVSLAM covariance directly to RTAB-Map.
 	// When true this disables covariance based lost detection.
