@@ -7128,6 +7128,32 @@ std::set<int> Memory::reactivateSignatures(const std::list<int> & ids, unsigned 
 // returns all non-null poses and links
 // if lookInDatabase is false, intermediate nodes are ignored and new neighbor links between non-intermediate nodes are returned
 // return unique links between nodes (for neighbors: old->new, for loops: parent->child)
+namespace {
+// Link already added between the same pair of nodes that would make the new link redundant.
+// Arbitrary pose constraints (e.g. INS relative motion) are independent measurements and are
+// kept alongside the neighbor/loop link between the same nodes; other types keep one per pair.
+std::multimap<int, Link>::iterator findRedundantLink(std::multimap<int, Link> & links, int from, int to, Link::Type type)
+{
+	if(type == Link::kArbitraryFromTo)
+	{
+		return graph::findLink(links, from, to, true, Link::kArbitraryFromTo);
+	}
+	for(int k = 0; k < 2; ++k)
+	{
+		int a = k == 0 ? from : to;
+		int b = k == 0 ? to : from;
+		for(std::multimap<int, Link>::iterator iter = links.find(a); iter != links.end() && iter->first == a; ++iter)
+		{
+			if(iter->second.to() == b && iter->second.type() != Link::kArbitraryFromTo)
+			{
+				return iter;
+			}
+		}
+	}
+	return links.end();
+}
+} // namespace
+
 void Memory::getMetricConstraints(
 		const std::set<int> & ids,
 		std::map<int, Transform> & poses,
@@ -7159,7 +7185,7 @@ void Memory::getMetricConstraints(
 			std::multimap<int, Link> tmpLinks = getLinks(*iter, lookInDatabase, true);
 			for(std::multimap<int, Link>::iterator jter=tmpLinks.begin(); jter!=tmpLinks.end(); ++jter)
 			{
-				std::multimap<int, Link>::iterator addedLinksIterator = graph::findLink(links, *iter, jter->first);
+				std::multimap<int, Link>::iterator addedLinksIterator = findRedundantLink(links, *iter, jter->first, jter->second.type());
 				if(	jter->second.isValid() &&
 					(addedLinksIterator == links.end() || addedLinksIterator->second.from()==addedLinksIterator->second.to()) &&
 					(uContains(poses, jter->first) || (landmarksAdded && jter->second.type() == Link::kLandmark)))
