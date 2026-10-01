@@ -324,7 +324,7 @@ Transform OdometryCuVSLAM::computeTransform(
 
     // cuVSLAM does not accept an external predicted pose; the internal motion model is used instead.
     if(!guess.isNull()) {
-        UDEBUG("External guess provided but ignored: cuVSLAM uses internal motion model only.");
+        UDEBUG("External guess provided: cuVSLAM uses its internal motion model; the guess only bridges recovery from a tracking loss.");
     }
 
     cuvslam::PoseEstimate pose_estimate;
@@ -462,10 +462,21 @@ Transform OdometryCuVSLAM::computeTransform(
     //  - we haven't yet accumulated enough landmarks since the last (re)initialization.
     // previous_pose_ is still advanced below so the next frame's delta is correct, and no
     // destructive teardown of the tracker is needed in either case.
-    bool suppress = wasRecovering || (!warmedUp_ && landmarks_num < min_landmarks_threshold_);
-    Transform transform = suppress ? Transform() : (previous_pose_.inverse() * current_pose);
+    // On recovery with an external guess (e.g. INS motion accumulated by OdometryROS while
+    // lost), report the guess instead of no motion: it bridges the outage, matching the pose
+    // that was dead-reckoned and published during the loss. Without it the odometry pose
+    // snaps back to where tracking was lost and the outage motion is discarded.
+    const bool bridged = wasRecovering && !guess.isNull();
+    bool suppress = (wasRecovering && !bridged) || (!warmedUp_ && landmarks_num < min_landmarks_threshold_);
+    Transform transform = bridged ? guess : (suppress ? Transform() : (previous_pose_.inverse() * current_pose));
 
-    if(wasRecovering)
+    if(bridged)
+    {
+        UWARN("cuVSLAM recovered after tracking loss; the SDK reset its internal coordinate "
+              "frame, so odometry is re-anchored and the outage is bridged with the guess (%s).",
+              guess.prettyPrint().c_str());
+    }
+    else if(wasRecovering)
     {
         UWARN("cuVSLAM recovered after tracking loss; the SDK reset its internal coordinate "
               "frame, so odometry is being re-anchored (this frame reports no motion).");
@@ -480,7 +491,20 @@ Transform OdometryCuVSLAM::computeTransform(
 
     if(info)
     {
-        info->reg.covariance = suppress ? cv::Mat::eye(6, 6, CV_64FC1) * 9999.0 : covMat;
+        if(bridged)
+        {
+            // The guess is an external dead-reckoning over the outage; give the bridging link a
+            // conservative uncertainty (10% of the distance, at least 0.1 m; 0.05 rad) so loop
+            // closures can still correct it.
+            const double linStd = std::max(0.1, 0.1 * (double)guess.getNorm());
+            info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1);
+            info->reg.covariance(cv::Range(0,3), cv::Range(0,3)) *= linStd * linStd;
+            info->reg.covariance(cv::Range(3,6), cv::Range(3,6)) *= 0.05 * 0.05;
+        }
+        else
+        {
+            info->reg.covariance = suppress ? cv::Mat::eye(6, 6, CV_64FC1) * 9999.0 : covMat;
+        }
         info->timeEstimation = timer.ticks();
     }
 
@@ -539,7 +563,7 @@ Transform OdometryCuVSLAM::computeTransform(
         // Populate localMap with 3D landmark positions in world frame. Skipped when the
         // transform is suppressed: right after a recovery, `transform` is null and there is
         // no valid absolute pose to project these (freshly re-anchored) landmarks into.
-        if(!suppress && !landmarks.empty())
+        if(!suppress && !bridged && !landmarks.empty())
         {
             Transform absolute_pose = this->getPose() * transform;
             for(const auto & landmark : landmarks)
