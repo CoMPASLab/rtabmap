@@ -80,6 +80,9 @@ private:
 	float max_translation_variance_;    // OdomCuVSLAM/MaxTranslationVariance (m^2), 0 = no limit
 	int reset_after_skipped_frames_;    // OdomCuVSLAM/ResetAfterSkippedFrames, 0 = never
 	int consecutiveSkips_;              // consecutive frames skipped for covariance
+	float guess_max_translation_error_; // OdomCuVSLAM/GuessMaxTranslationError (m)
+	float guess_max_translation_ratio_; // OdomCuVSLAM/GuessMaxTranslationRatio
+	float guess_max_rotation_error_;    // OdomCuVSLAM/GuessMaxRotationError (deg)
 
 	// Forward cuVSLAM covariance directly to RTAB-Map.
 	// When true this disables covariance based lost detection.

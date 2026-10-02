@@ -181,10 +181,20 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     max_rotation_variance_(Parameters::defaultOdomCuVSLAMMaxRotationVariance()),
     max_translation_variance_(Parameters::defaultOdomCuVSLAMMaxTranslationVariance()),
     reset_after_skipped_frames_(Parameters::defaultOdomCuVSLAMResetAfterSkippedFrames()),
-    consecutiveSkips_(0)
+    consecutiveSkips_(0),
+    guess_max_translation_error_(Parameters::defaultOdomCuVSLAMGuessMaxTranslationError()),
+    guess_max_translation_ratio_(Parameters::defaultOdomCuVSLAMGuessMaxTranslationRatio()),
+    guess_max_rotation_error_(Parameters::defaultOdomCuVSLAMGuessMaxRotationError())
 #endif
 {
 #ifdef RTABMAP_CUVSLAM
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMGuessMaxTranslationError(), guess_max_translation_error_);
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMGuessMaxTranslationRatio(), guess_max_translation_ratio_);
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMGuessMaxRotationError(), guess_max_rotation_error_);
+    UINFO("%s=%f %s=%f %s=%f",
+          Parameters::kOdomCuVSLAMGuessMaxTranslationError().c_str(), guess_max_translation_error_,
+          Parameters::kOdomCuVSLAMGuessMaxTranslationRatio().c_str(), guess_max_translation_ratio_,
+          Parameters::kOdomCuVSLAMGuessMaxRotationError().c_str(), guess_max_rotation_error_);
     Parameters::parse(parameters, Parameters::kRegForce3DoF(), planar_constraints_);
     Parameters::parse(parameters, Parameters::kOdomCuVSLAMMulticamMode(), multicam_mode_);
     UASSERT(multicam_mode_ >= 0 && multicam_mode_ <= 2);
@@ -493,6 +503,31 @@ Transform OdometryCuVSLAM::computeTransform(
     bool suppress = (wasRecovering && !bridged) || (!warmedUp_ && landmarks_num < min_landmarks_threshold_);
     Transform transform = bridged ? guess : (suppress ? Transform() : (previous_pose_.inverse() * current_pose));
 
+    // cuVSLAM can keep a confident, low-covariance track that is wrong (e.g. features on a
+    // drifting sediment plume): no loss is reported, but the motion disagrees with the guess.
+    // Both cover the same interval (OdometryROS accumulates the guess until a frame is
+    // accepted), so on a large disagreement report the guess instead, like a bridged outage.
+    bool substituted = false;
+    if(!bridged && !suppress && !guess.isNull() &&
+       (guess_max_translation_error_ > 0.0f || guess_max_translation_ratio_ > 0.0f || guess_max_rotation_error_ > 0.0f))
+    {
+        const Transform delta = guess.inverse() * transform;
+        const float transError = delta.getNorm();
+        const float transLimit = guess_max_translation_error_ + guess_max_translation_ratio_ * guess.getNorm();
+        const float rotError = (float)(Eigen::AngleAxisd(delta.toEigen3d().rotation()).angle() * 180.0 / M_PI);
+        const bool transBad = (guess_max_translation_error_ > 0.0f || guess_max_translation_ratio_ > 0.0f) && transError > transLimit;
+        const bool rotBad = guess_max_rotation_error_ > 0.0f && rotError > guess_max_rotation_error_;
+        if(transBad || rotBad)
+        {
+            UWARN("cuVSLAM motion disagrees with the guess (translation %.3f m vs %.3f m, difference %.3f m > %.3f m: %s; "
+                  "rotation difference %.2f deg > %.2f deg: %s); reporting the guess for this frame.",
+                  transform.getNorm(), guess.getNorm(), transError, transLimit, transBad ? "yes" : "no",
+                  rotError, guess_max_rotation_error_, rotBad ? "yes" : "no");
+            transform = guess;
+            substituted = true;
+        }
+    }
+
     if(bridged)
     {
         UWARN("cuVSLAM recovered after tracking loss; the SDK reset its internal coordinate "
@@ -515,11 +550,11 @@ Transform OdometryCuVSLAM::computeTransform(
 
     if(info)
     {
-        if(bridged)
+        if(bridged || substituted)
         {
-            // The guess is an external dead-reckoning over the outage; give the bridging link a
-            // conservative uncertainty (10% of the distance, at least 0.1 m; 0.05 rad) so loop
-            // closures can still correct it.
+            // The guess is an external dead-reckoning over the outage (or the rejected frame);
+            // give the link a conservative uncertainty (10% of the distance, at least 0.1 m;
+            // 0.05 rad) so loop closures can still correct it.
             const double linStd = std::max(0.1, 0.1 * (double)guess.getNorm());
             info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1);
             info->reg.covariance(cv::Range(0,3), cv::Range(0,3)) *= linStd * linStd;
@@ -587,7 +622,7 @@ Transform OdometryCuVSLAM::computeTransform(
         // Populate localMap with 3D landmark positions in world frame. Skipped when the
         // transform is suppressed: right after a recovery, `transform` is null and there is
         // no valid absolute pose to project these (freshly re-anchored) landmarks into.
-        if(!suppress && !bridged && !landmarks.empty())
+        if(!suppress && !bridged && !substituted && !landmarks.empty())
         {
             Transform absolute_pose = this->getPose() * transform;
             for(const auto & landmark : landmarks)
