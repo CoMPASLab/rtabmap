@@ -1,12 +1,10 @@
 name: CMake-MacOS
 
+# Disabled for automatic runs in the CoMPASLab fork: it targets Linux/Jetson (cuVSLAM), and the
+# macOS toolchains fail for environment reasons unrelated to changes (Homebrew OpenCV 5 without
+# calib3d on macOS; vcpkg cache / Eigen3 on Windows). Run manually from the Actions tab if needed.
 on:
-  push:
-    branches: 
-      - master
-  pull_request:
-    branches: 
-      - '**'
+  workflow_dispatch:
 
 env:
   BUILD_TYPE: Release
