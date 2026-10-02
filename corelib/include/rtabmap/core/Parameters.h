@@ -692,6 +692,7 @@ class RTABMAP_CORE_EXPORT Parameters
     RTABMAP_PARAM(OdomCuVSLAM, MulticamMode,        int, 0,  "cuVSLAM multicam_mode setting: 0=moderate, 1=performance, 2=precision.");
     RTABMAP_PARAM(OdomCuVSLAM, MaxRotationVariance,    float, 0.1, "Frames whose cuVSLAM rotation variance (rad^2, any axis) exceeds this are skipped; tracking stays continuous. 0 = no limit.");
     RTABMAP_PARAM(OdomCuVSLAM, MaxTranslationVariance, float, 0.1, "Frames whose cuVSLAM translation variance (m^2, any axis) exceeds this are skipped; tracking stays continuous. 0 = no limit.");
+    RTABMAP_PARAM(OdomCuVSLAM, ResetAfterSkippedFrames, int, 0, "Re-initialize the cuVSLAM tracker after this many consecutive frames skipped for covariance (a tracker stuck in a degraded state after a loss); the re-initialization is treated as a tracking loss, so the next frame is bridged with the guess if one is available. 0 = never.");
 
     // Odometry LIO-SAM
     RTABMAP_PARAM_STR(OdomLIOSAM, ConfigPath,  "", "Path to LIO-SAM params.yaml config file. When set, sensor/IMU/feature parameters are loaded from the file and the individual parameters below are ignored.");
