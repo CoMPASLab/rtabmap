@@ -179,7 +179,9 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     gpu_right_image_sizes_(),
     cuda_stream_(nullptr),
     max_rotation_variance_(Parameters::defaultOdomCuVSLAMMaxRotationVariance()),
-    max_translation_variance_(Parameters::defaultOdomCuVSLAMMaxTranslationVariance())
+    max_translation_variance_(Parameters::defaultOdomCuVSLAMMaxTranslationVariance()),
+    reset_after_skipped_frames_(Parameters::defaultOdomCuVSLAMResetAfterSkippedFrames()),
+    consecutiveSkips_(0)
 #endif
 {
 #ifdef RTABMAP_CUVSLAM
@@ -189,6 +191,7 @@ OdometryCuVSLAM::OdometryCuVSLAM(const ParametersMap & parameters) :
     UINFO("%s=%d", Parameters::kOdomCuVSLAMMulticamMode().c_str(), multicam_mode_);
     Parameters::parse(parameters, Parameters::kOdomCuVSLAMMaxRotationVariance(), max_rotation_variance_);
     Parameters::parse(parameters, Parameters::kOdomCuVSLAMMaxTranslationVariance(), max_translation_variance_);
+    Parameters::parse(parameters, Parameters::kOdomCuVSLAMResetAfterSkippedFrames(), reset_after_skipped_frames_);
     UINFO("%s=%f %s=%f", Parameters::kOdomCuVSLAMMaxRotationVariance().c_str(), max_rotation_variance_,
           Parameters::kOdomCuVSLAMMaxTranslationVariance().c_str(), max_translation_variance_);
     // Warm up GPU and create CUDA context before tracker initialization
@@ -396,6 +399,16 @@ Transform OdometryCuVSLAM::computeTransform(
                 // last accepted pose. The next accepted frame then reports the whole motion
                 // since that pose instead of being re-anchored, which would discard it.
                 UWARN("Covariance diagonal[%d]=%.8f is too large; skipping this frame.", i, diag_val);
+                ++consecutiveSkips_;
+                if(reset_after_skipped_frames_ > 0 && consecutiveSkips_ >= reset_after_skipped_frames_)
+                {
+                    // Tracker stuck in a degraded state: start a fresh one. Flag it as a loss so
+                    // the first frame of the new tracker is bridged (or re-anchored) like a recovery.
+                    UWARN("%d consecutive frames skipped for covariance; re-initializing the cuVSLAM tracker.", consecutiveSkips_);
+                    cleanupCuVSLAMResources();
+                    wasLost_ = true;
+                    consecutiveSkips_ = 0;
+                }
                 last_timestamp_ = data.stamp();
                 if(info) {
                     info->reg.covariance = cv::Mat::eye(6, 6, CV_64FC1) * 9999.0;
@@ -483,6 +496,7 @@ Transform OdometryCuVSLAM::computeTransform(
 
     previous_pose_ = current_pose;
     wasLost_ = false;
+    consecutiveSkips_ = 0;
     if(landmarks_num >= min_landmarks_threshold_)
     {
         warmedUp_ = true;
